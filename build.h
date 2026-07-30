@@ -65,6 +65,25 @@ typedef struct Build_Program {
    #define Program Build_Program
 #endif
 
+typedef struct Build_CStringList {
+   char** data;
+   int count;
+   int capacity;
+} Build_CStringList;
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define CStringList Build_CStringList
+#endif
+
+BUILD_DEF int build_append_to_cstring_list(Build_CStringList* list, const char* arg);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define append_to_cstring_list build_append_to_cstring_list
+#endif
+
+BUILD_DEF void build_free_cstring_list(Build_CStringList* list);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define free_cstring_list build_free_cstring_list
+#endif
+
 BUILD_DEF int build_set_current_directory(const char* path);
 #if !defined(BUILD_UNSTRIP_PREFIX)
    #define set_current_directory build_set_current_directory
@@ -75,6 +94,7 @@ BUILD_DEF int build_new_directory(const char* path);
    #define new_directory build_new_directory
 #endif
 
+/* TODO: implement */
 BUILD_DEF int build_delete_directory(const char* path);
 #if !defined(BUILD_UNSTRIP_PREFIX)
    #define delete_directory build_delete_directory
@@ -95,9 +115,61 @@ BUILD_DEF char* build_clone_bytes(const char* s);
 #ifdef BUILD_IMPLEMENTATION
 #undef BUILD_IMPLEMENTATION
 
+BUILD_DEF int build_append_to_cstring_list(Build_CStringList* list, const char* item)
+{
+   char* item_clone = NULL;
+
+   BUILD_ASSERT(list);
+
+   if (list->capacity == 0) {
+      int new_capacity = 2;
+      list->data = (char**)BUILD_MEM_ALLOC(sizeof(*list->data) * 2);
+      if (!list->data) {
+         /* TODO: logging */
+         return 0;
+      }
+      list->capacity = new_capacity;
+   } else if ((list->count + 1) > (list->capacity))  {
+      int new_capacity = list->capacity * 2;
+      char** tmp = (char**)BUILD_MEM_REALLOC(list->data, sizeof(*list->data) * new_capacity);
+      if (!tmp) {
+         /* TODO: logging */
+         return 0;
+      }
+      list->capacity = new_capacity;
+      list->data = tmp;
+   }
+
+   item_clone = build_clone_bytes(item);
+   if (!item_clone) {
+      /* TODO: logging */
+      return 0;
+   }
+
+   list->data[list->count++] = item_clone;
+   return 1;
+}
+
+BUILD_DEF void build_free_cstring_list(Build_CStringList* list)
+{
+   int i = 0;
+
+   BUILD_ASSERT(list);
+
+   for (i = 0; i < list->capacity; i++) {
+      BUILD_MEM_FREE(list->data[i]);
+      list->data[i] = NULL;
+   }
+   BUILD_MEM_FREE(list->data);
+   list->data = NULL;
+   list->count = 0;
+   list->capacity = 0;
+}
+
+/* TODO: log errors */
 BUILD_DEF int build_new_directory(const char* path)
 {
-   int result = 0;
+   int result = 1;
    int i = 0;
    char* path_cstr = build_clone_bytes(path);
    int path_len = build_count_bytes(path);
@@ -116,11 +188,15 @@ BUILD_DEF int build_new_directory(const char* path)
          path_cstr[i] = temp_char;
       } else if (i == (path_len - 1)) {
 #if BUILD_OS_WINDOWS
-         CreateDirectoryA(path_cstr, NULL);
+         result = CreateDirectoryA(path_cstr, NULL);
 #else
          result = mkdir(path_cstr, 0755);
          result = !result;
 #endif
+      }
+
+      if (!result) {
+         /* TODO: ignore "directory already exist" errors, log the rest */
       }
    }
 
