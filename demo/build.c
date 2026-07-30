@@ -7,7 +7,7 @@ int main(int argc, char** argv)
 {
    printf("Hello, world!\n");
 
-   directory_new("testdata/hello/world");
+   new_directory("testdata/hello/world");
 
    return 0;
 }

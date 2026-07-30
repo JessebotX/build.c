@@ -3,6 +3,10 @@
 #ifndef BUILD_H_
 #define BUILD_H_
 
+#if !defined(NULL)
+   #define NULL ((void*)0)
+#endif
+
 #if !defined(BUILD_DEF)
    #define BUILD_DEF
 #endif
@@ -26,10 +30,6 @@
    #if !defined(BUILD_MEM_FREE)
       #define BUILD_MEM_FREE free
    #endif
-#endif
-
-#if !defined(NULL)
-   #define NULL ((void*)0)
 #endif
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -56,30 +56,38 @@
    #error "OS unsupported"
 #endif
 
-typedef struct {
+typedef struct Build_Program {
    char* name;
    char** argv;
    int argc;
-} build_Program;
-
-BUILD_DEF int build_directory_new(const char* path);
-#if !defined(BUILD_PREFIX_DEFINITIONS)
-   #define directory_new build_directory_new
+} Build_Program;
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define Program Build_Program
 #endif
 
-BUILD_DEF int build_directory_delete(const char* path);
-#if !defined(BUILD_PREFIX_DEFINITIONS)
-   #define directory_delete build_directory_delete
+BUILD_DEF int build_set_current_directory(const char* path);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define set_current_directory build_set_current_directory
 #endif
 
-BUILD_DEF int build_bytes_len(const char* s);
-#if !defined(BUILD_PREFIX_DEFINITIONS)
-   #define bytes_len build_bytes_len
+BUILD_DEF int build_new_directory(const char* path);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define new_directory build_new_directory
 #endif
 
-BUILD_DEF char* build_bytes_clone(const char* s);
-#if !defined(BUILD_PREFIX_DEFINITIONS)
-   #define bytes_clone build_bytes_clone
+BUILD_DEF int build_delete_directory(const char* path);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define delete_directory build_delete_directory
+#endif
+
+BUILD_DEF int build_count_bytes(const char* s);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define count_bytes build_count_bytes
+#endif
+
+BUILD_DEF char* build_clone_bytes(const char* s);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define clone_bytes build_clone_bytes
 #endif
 
 #endif /* BUILD_H_ */
@@ -87,12 +95,12 @@ BUILD_DEF char* build_bytes_clone(const char* s);
 #ifdef BUILD_IMPLEMENTATION
 #undef BUILD_IMPLEMENTATION
 
-BUILD_DEF int build_directory_new(const char* path)
+BUILD_DEF int build_new_directory(const char* path)
 {
    int result = 0;
    int i = 0;
-   char* path_cstr = build_bytes_clone(path);
-   int path_len = build_bytes_len(path);
+   char* path_cstr = build_clone_bytes(path);
+   int path_len = build_count_bytes(path);
    char temp_char = '\0';
 
    for (i = 0; i < path_len; i++) {
@@ -120,7 +128,7 @@ BUILD_DEF int build_directory_new(const char* path)
    return result;
 }
 
-BUILD_DEF int build_directory_delete(const char* path)
+BUILD_DEF int build_delete_directory(const char* path)
 {
    int result = 0;
 
@@ -129,7 +137,7 @@ BUILD_DEF int build_directory_delete(const char* path)
    return result;
 }
 
-BUILD_DEF int build_bytes_len(const char* s)
+BUILD_DEF int build_count_bytes(const char* s)
 {
    int len = 0;
    while (*s++) {
@@ -138,10 +146,10 @@ BUILD_DEF int build_bytes_len(const char* s)
    return len;
 }
 
-BUILD_DEF char* build_bytes_clone(const char* s)
+BUILD_DEF char* build_clone_bytes(const char* s)
 {
    int i = 0;
-   int len = build_bytes_len(s);
+   int len = build_count_bytes(s);
    char* result = (char*)BUILD_MEM_ALLOC(sizeof(*s) * (len + 1));
    if (!result) {
       return NULL;
