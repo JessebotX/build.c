@@ -3,6 +3,10 @@
 #ifndef BUILD_H_
 #define BUILD_H_
 
+#define BUILD_VERSION_MAJOR 1
+#define BUILD_VERSION_MINOR 0
+#define BUILD_VERSION_PATCH 0
+
 #if !defined(NULL)
    #define NULL ((void*)0)
 #endif
@@ -10,6 +14,11 @@
 #if !defined(BUILD_DEF)
    #define BUILD_DEF
 #endif
+
+#if !defined(BUILD_INTERNAL_DEF)
+   #define BUILD_INTERNAL_DEF static
+#endif
+
 
 #if !defined(BUILD_ASSERT)
    #include <assert.h>
@@ -83,6 +92,11 @@ typedef struct Build_StringBuffer {
    #define StringBuffer Build_StringBuffer
 #endif
 
+BUILD_DEF char* build_append_to_string_buffer_with_count(Build_StringBuffer* buf, const char* arg, int arg_count);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define append_to_string_buffer_with_count build_append_to_string_buffer_with_count
+#endif
+
 BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const char* arg);
 #if !defined(BUILD_UNSTRIP_PREFIX)
    #define append_to_string_buffer build_append_to_string_buffer
@@ -129,18 +143,23 @@ BUILD_DEF char* build_clone_bytes(const char* s);
    #define clone_bytes build_clone_bytes
 #endif
 
+BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, Build_StringBuffer* buf);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define win32_join_and_quote_command_list build_win32_join_and_quote_command_list
+#endif
+
 #endif /* BUILD_H_ */
 
 #ifdef BUILD_IMPLEMENTATION
 #undef BUILD_IMPLEMENTATION
 
-BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const char* arg)
+BUILD_DEF char* build_append_to_string_buffer_with_count(Build_StringBuffer* buf, const char* arg, int arg_count)
 {
-   int arg_count = count_bytes(arg);
    int new_count = 0;
    int i = 0;
 
    BUILD_ASSERT(buf);
+   BUILD_ASSERT(arg_count >= 0);
 
    new_count = buf->count + arg_count;
 
@@ -172,6 +191,11 @@ BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const cha
    buf->count = new_count;
 
    return buf->data;
+}
+
+BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const char* arg)
+{
+   return build_append_to_string_buffer_with_count(buf, arg, count_bytes(arg));
 }
 
 BUILD_DEF void build_free_string_buffer(Build_StringBuffer* buf)
@@ -308,6 +332,55 @@ BUILD_DEF char* build_clone_bytes(const char* s)
    result[len] = '\0';
 
    return result;
+}
+
+BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, Build_StringBuffer* buf)
+{
+   int i = 0;
+
+   BUILD_ASSERT(list);
+   BUILD_ASSERT(buf);
+
+   for (i = 0; i < list->count; i++) {
+      int len = build_count_bytes(list->data[i]);
+      int backslashes = 0;
+      int j = 0;
+
+      if (list->data[i] == NULL) {
+         break;
+      }
+
+      if (i > 0) {
+         build_append_to_string_buffer(buf, " ");
+      }
+
+      /* TODO: dont quote if u cant find one of the following chars:  { '\t', '\n', '\v', '\"' }
+      if (len != 0 && strpbrk(list->data[i], " \t\n\v\"")) {
+      } else { // ... everything below ...
+       */
+
+      build_append_to_string_buffer(buf, "\"");
+      for (j = 0; j < len; j++) {
+         char c = list->data[i][j];
+         if (c == '\\') {
+            backslashes++;
+         } else {
+            if (c == '\"') {
+               int k = 0;
+               for (k = 0; k < backslashes + 1; k++) {
+                  build_append_to_string_buffer(buf, "\\");
+               }
+            }
+            backslashes = 0;
+         }
+         build_append_to_string_buffer_with_count(buf, &c, 1);
+      }
+
+      for (j = 0; j < backslashes; j++) {
+         build_append_to_string_buffer(buf, "\\");
+      }
+      build_append_to_string_buffer(buf, "\"");
+   }
 }
 
 #endif /* BUILD_IMPLEMENTATION */
