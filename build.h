@@ -65,23 +65,42 @@ typedef struct Build_Program {
    #define Program Build_Program
 #endif
 
-typedef struct Build_CStringList {
+typedef struct Build_StringList {
    char** data;
    int count;
    int capacity;
-} Build_CStringList;
+} Build_StringList;
 #if !defined(BUILD_UNSTRIP_PREFIX)
-   #define CStringList Build_CStringList
+   #define StringList Build_StringList
 #endif
 
-BUILD_DEF int build_append_to_cstring_list(Build_CStringList* list, const char* arg);
+typedef struct Build_StringBuffer {
+   char* data;
+   int count;
+   int capacity;
+} Build_StringBuffer;
 #if !defined(BUILD_UNSTRIP_PREFIX)
-   #define append_to_cstring_list build_append_to_cstring_list
+   #define StringBuffer Build_StringBuffer
 #endif
 
-BUILD_DEF void build_free_cstring_list(Build_CStringList* list);
+BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const char* arg);
 #if !defined(BUILD_UNSTRIP_PREFIX)
-   #define free_cstring_list build_free_cstring_list
+   #define append_to_string_buffer build_append_to_string_buffer
+#endif
+
+BUILD_DEF void build_free_string_buffer(Build_StringBuffer* buf);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define free_string_buffer build_free_string_buffer
+#endif
+
+BUILD_DEF int build_append_to_string_list(Build_StringList* list, const char* arg);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define append_to_string_list build_append_to_string_list
+#endif
+
+BUILD_DEF void build_free_string_list(Build_StringList* list);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define free_string_list build_free_string_list
 #endif
 
 BUILD_DEF int build_set_current_directory(const char* path);
@@ -115,7 +134,59 @@ BUILD_DEF char* build_clone_bytes(const char* s);
 #ifdef BUILD_IMPLEMENTATION
 #undef BUILD_IMPLEMENTATION
 
-BUILD_DEF int build_append_to_cstring_list(Build_CStringList* list, const char* item)
+BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const char* arg)
+{
+   int arg_count = count_bytes(arg);
+   int new_count = 0;
+   int i = 0;
+
+   BUILD_ASSERT(buf);
+
+   new_count = buf->count + arg_count;
+
+   if (buf->capacity <= 0) {
+      int new_capacity = arg_count + 1;
+      buf->data = (char*)BUILD_MEM_ALLOC(sizeof(*buf->data) * new_capacity);
+      if (!buf->data) {
+         return NULL;
+      }
+      buf->capacity = new_capacity;
+   } else if (buf->capacity <= new_count) {
+      char* tmp = NULL;
+      int new_capacity = buf->capacity * 2;
+      while (new_capacity <= new_count) {
+         new_capacity = new_capacity * 2;
+      }
+      tmp = (char*)BUILD_MEM_REALLOC(buf->data, sizeof(*buf->data) * new_capacity);
+      if (!tmp) {
+         return NULL;
+      }
+      buf->data = tmp;
+      buf->capacity = new_capacity;
+   }
+
+   for (i = 0; i < arg_count; i++) {
+      (buf->data + buf->count)[i] = arg[i];
+   }
+   buf->data[new_count] = '\0';
+   buf->count = new_count;
+
+   return buf->data;
+}
+
+BUILD_DEF void build_free_string_buffer(Build_StringBuffer* buf)
+{
+   if (!buf) {
+      return;
+   }
+
+   BUILD_MEM_FREE(buf->data);
+   buf->data = NULL;
+   buf->count = 0;
+   buf->capacity = 0;
+}
+
+BUILD_DEF int build_append_to_string_list(Build_StringList* list, const char* item)
 {
    char* item_clone = NULL;
 
@@ -150,7 +221,7 @@ BUILD_DEF int build_append_to_cstring_list(Build_CStringList* list, const char* 
    return 1;
 }
 
-BUILD_DEF void build_free_cstring_list(Build_CStringList* list)
+BUILD_DEF void build_free_string_list(Build_StringList* list)
 {
    int i = 0;
 
