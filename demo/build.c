@@ -5,11 +5,8 @@
 
 int main(int argc, char** argv)
 {
-   new_directory("testdata/hello/world");
-
    {
       StringList l = { 0 };
-      StringBuffer s = { 0 };
       int i = 0;
 
       append_to_string_list(&l, "clang");
@@ -17,12 +14,10 @@ int main(int argc, char** argv)
       append_to_string_list(&l, "-Wextra");
       append_to_string_list(&l, "demo/main.c");
       append_to_string_list(&l, "-o");
-      append_to_string_list(&l, "demo.exe");
+      append_to_string_list(&l, "out/demo.exe");
 
-      win32_join_and_quote_command_list(&l, &s);
-      printf("%s\n", s.data);
+      win32_run_command(&l);
 
-      free_string_buffer(&s);
       free_string_list(&l);
    }
 

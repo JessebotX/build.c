@@ -3,9 +3,9 @@
 #ifndef BUILD_H_
 #define BUILD_H_
 
-#define BUILD_VERSION_MAJOR 1
+#define BUILD_VERSION_MAJOR 0
 #define BUILD_VERSION_MINOR 0
-#define BUILD_VERSION_PATCH 0
+#define BUILD_VERSION_PATCH 1
 
 #if !defined(NULL)
    #define NULL ((void*)0)
@@ -146,6 +146,11 @@ BUILD_DEF char* build_clone_bytes(const char* s);
 BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, Build_StringBuffer* buf);
 #if !defined(BUILD_UNSTRIP_PREFIX)
    #define win32_join_and_quote_command_list build_win32_join_and_quote_command_list
+#endif
+
+BUILD_DEF void build_win32_run_command(Build_StringList* list);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define win32_run_command build_win32_run_command
 #endif
 
 #endif /* BUILD_H_ */
@@ -381,6 +386,32 @@ BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, B
       }
       build_append_to_string_buffer(buf, "\"");
    }
+}
+
+BUILD_DEF void build_win32_run_command(Build_StringList* list)
+{
+   Build_StringBuffer cmd = BUILD__EMPTY_VALUE;
+   STARTUPINFO startup = BUILD__EMPTY_VALUE;
+   PROCESS_INFORMATION process = BUILD__EMPTY_VALUE;
+   BOOL ok = FALSE;
+
+   BUILD_ASSERT(list);
+
+   build_win32_join_and_quote_command_list(list, &cmd);
+
+   startup.cb = sizeof(STARTUPINFO);
+   startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+   startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+   startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+   startup.dwFlags |= STARTF_USESTDHANDLES;
+
+   ok = CreateProcessA(NULL, cmd.data, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process);
+   free_string_buffer(&cmd);
+   if (!ok) {
+      /* TODO: handle error */
+   }
+
+   CloseHandle(process.hThread);
 }
 
 #endif /* BUILD_IMPLEMENTATION */
