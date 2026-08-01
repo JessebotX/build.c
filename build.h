@@ -19,7 +19,6 @@
    #define BUILD_INTERNAL_DEF static
 #endif
 
-
 #if !defined(BUILD_ASSERT)
    #include <assert.h>
    #define BUILD_ASSERT(condition) assert((condition))
