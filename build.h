@@ -1,11 +1,33 @@
-/* -*- mode: c; -*- */
+/* build.h -*- mode: c -*-
+
+Single header-only C89+ library for writing build recipes.
+
+# License
+
+SPDX-License-Identifier: 0BSD
+
+Copyright (C) 2026 by Jesse <jessebot.git@gmail.com>
+
+Permission to use, copy, modify, and/or distribute this software for
+any purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
+PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+*/
 
 #ifndef BUILD_H_
 #define BUILD_H_
 
 #define BUILD_VERSION_MAJOR 0
 #define BUILD_VERSION_MINOR 0
-#define BUILD_VERSION_PATCH 1
+#define BUILD_VERSION_PATCH 2
 
 #if !defined(NULL)
    #define NULL ((void*)0)
@@ -91,6 +113,10 @@ typedef struct Build_StringBuffer {
    #define StringBuffer Build_StringBuffer
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 BUILD_DEF char* build_append_to_string_buffer_with_count(Build_StringBuffer* buf, const char* arg, int arg_count);
 #if !defined(BUILD_UNSTRIP_PREFIX)
    #define append_to_string_buffer_with_count build_append_to_string_buffer_with_count
@@ -147,9 +173,13 @@ BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, B
    #define win32_join_and_quote_command_list build_win32_join_and_quote_command_list
 #endif
 
-BUILD_DEF void build_win32_run_command(Build_StringList* list);
+BUILD_DEF int build_run_command(Build_StringList* list);
 #if !defined(BUILD_UNSTRIP_PREFIX)
-   #define win32_run_command build_win32_run_command
+   #define run_command build_run_command
+#endif
+
+#ifdef __cplusplus
+} /* extern "C" */
 #endif
 
 #endif /* BUILD_H_ */
@@ -387,8 +417,9 @@ BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, B
    }
 }
 
-BUILD_DEF void build_win32_run_command(Build_StringList* list)
+BUILD_DEF int build_run_command(Build_StringList* list)
 {
+#if BUILD_OS_WINDOWS
    Build_StringBuffer cmd = BUILD__EMPTY_VALUE;
    STARTUPINFO startup = BUILD__EMPTY_VALUE;
    PROCESS_INFORMATION process = BUILD__EMPTY_VALUE;
@@ -411,6 +442,11 @@ BUILD_DEF void build_win32_run_command(Build_StringList* list)
    }
 
    CloseHandle(process.hThread);
+#else
+   return 0;
+#endif
+
+   return 1;
 }
 
 #endif /* BUILD_IMPLEMENTATION */

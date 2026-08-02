@@ -14,9 +14,7 @@ int main(int argc, char** argv)
    append_to_string_list(&cmd, "-o");
    append_to_string_list(&cmd, "out/demo.exe");
 
-   win32_run_command(&cmd);
-
-   free_string_list(&cmd);
+   run_command(&cmd);
 
    return 0;
 }
