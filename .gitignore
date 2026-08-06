@@ -1,4 +1,7 @@
 /out
+/build
+*.o
+*.obj
 *.exe
 *.out
 *.ilk

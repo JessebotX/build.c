@@ -1,8 +1,11 @@
 #define BUILD_IMPLEMENTATION
 #include "build.h"
 
+#include <stdio.h>
+
 int main(int argc, char** argv)
 {
+#if 0
    StringList cmd = { 0 };
 
    build_new_directory("out");
@@ -15,6 +18,9 @@ int main(int argc, char** argv)
    append_to_string_list(&cmd, "out/demo.exe");
 
    run_command(&cmd);
+#endif
+
+   printf("Hello world\n");
 
    return 0;
 }
