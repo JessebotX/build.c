@@ -3,18 +3,17 @@
 
 int main(int argc, char** argv)
 {
-   StringList cmd = { 0 };
+   StringList cmd = string_list_new_capacity(NULL, 20);
 
-   build_new_directory("out");
+#if 0
+   string_list_append(&cmd, "-O0");
+   string_list_append(&cmd, "-g3");
+   string_list_append(&cmd, "demo/main.c");
+   string_list_append(&cmd, "-o");
+   string_list_append(&cmd, "out/demo.exe");
 
-   append_to_string_list(&cmd, "clang");
-   append_to_string_list(&cmd, "-O0");
-   append_to_string_list(&cmd, "-g3");
-   append_to_string_list(&cmd, "demo/main.c");
-   append_to_string_list(&cmd, "-o");
-   append_to_string_list(&cmd, "out/demo.exe");
-
-   run_command(&cmd);
+   command_execute(&cmd);
+#endif
 
    return 0;
 }

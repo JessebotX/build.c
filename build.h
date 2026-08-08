@@ -19,434 +19,320 @@ DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
 PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
 TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
-
 */
 
-#ifndef BUILD_H_
-#define BUILD_H_
+#ifndef BUILD_H
+#define BUILD_H
 
 #define BUILD_VERSION_MAJOR 0
-#define BUILD_VERSION_MINOR 0
-#define BUILD_VERSION_PATCH 2
+#define BUILD_VERSION_MINOR 1
+#define BUILD_VERSION_PATCH 0
 
-#if !defined(NULL)
+#if !BUILD_OS_OTHER
+   #if defined(_WIN32) || defined(_WIN64)
+      #ifndef BUILD_OS_WINDOWS
+         #define BUILD_OS_WINDOWS 1
+      #endif
+   #else
+      #error OS unsupported by default
+   #endif
+#else
+   #define BUILD_OS_OTHER 1
+#endif
+
+#ifndef NULL
    #define NULL ((void*)0)
 #endif
 
-#if !defined(BUILD_DEF)
+#ifndef BUILD_DEF
    #define BUILD_DEF
 #endif
 
-#if !defined(BUILD_INTERNAL_DEF)
+#ifndef BUILD_INTERNAL_DEF
    #define BUILD_INTERNAL_DEF static
 #endif
 
-#if !defined(BUILD_ASSERT)
-   #include <assert.h>
-   #define BUILD_ASSERT(condition) assert((condition))
+#ifndef BUILD_NO_STDINC
+   #ifndef BUILD_ASSERT
+      #include <assert.h>
+      #define BUILD_ASSERT(condition) assert((condition))
+   #endif
+
+   #if !defined(BUILD_MEM_ALLOC) || !defined(BUILD_MEM_REALLOC) || !defined(BUILD_MEM_FREE)
+      #include <stdlib.h>
+   #endif
+
+   #ifndef BUILD_MEM_ALLOC
+      #define BUILD_MEM_ALLOC(n) malloc(n)
+   #endif
+
+   #ifndef BUILD_MEM_REALLOC
+      #define BUILD_MEM_REALLOC(ptr, n, n_old) realloc(ptr, n)
+   #endif
+
+   #ifndef BUILD_MEM_FREE
+      #define BUILD_MEM_FREE(ptr, n) free
+   #endif
 #endif
 
-#if !defined(BUILD_MEM_ALLOC) || !defined(BUILD_MEM_REALLOC) || !defined(BUILD_MEM_FREE)
-   #include <stdlib.h>
-
-   #if !defined(BUILD_MEM_ALLOC)
-      #define BUILD_MEM_ALLOC malloc
-   #endif
-
-   #if !defined(BUILD_MEM_REALLOC)
-      #define BUILD_MEM_REALLOC realloc
-   #endif
-
-   #if !defined(BUILD_MEM_FREE)
-      #define BUILD_MEM_FREE free
-   #endif
-#endif
-
-#if defined(_WIN32) || defined(_WIN64)
-   #if !defined(BUILD_OS_WINDOWS)
-      #define BUILD_OS_WINDOWS 1
-   #endif
-#elif defined(__linux__)
-   #if !defined(BUILD_OS_LINUX)
-      #define BUILD_OS_LINUX 1
-   #endif
+#if __STDC_VERSION__ >= 202311L || __cplusplus >= 201103L
+   #define BUILD__EMPTY_VALUE {}
 #else
-   #define BUILD_OS_UNSUPPORTED 1
+   #define BUILD__EMPTY_VALUE {0}
 #endif
 
-/* TODO: if C23+ or C++ use {} instead */
-#define BUILD__EMPTY_VALUE {0}
-
-#if BUILD_OS_WINDOWS
-   #define WIN32_LEAN_AND_MEAN
-   #include <Windows.h>
-#elif BUILD_OS_LINUX
-   #include <sys/stat.h>
-#else
-   #error "OS unsupported"
-#endif
-
-typedef struct Build_Program {
-   char* name;
-   char** argv;
-   int argc;
-} Build_Program;
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define Program Build_Program
-#endif
-
-typedef struct Build_StringList {
-   char** data;
-   int count;
-   int capacity;
-} Build_StringList;
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define StringList Build_StringList
-#endif
-
-typedef struct Build_StringBuffer {
+typedef struct Build_StringBuffer Build_StringBuffer;
+struct Build_StringBuffer {
    char* data;
    int count;
    int capacity;
-} Build_StringBuffer;
-#if !defined(BUILD_UNSTRIP_PREFIX)
+};
+#ifndef BUILD_UNSTRIP_PREFIX
    #define StringBuffer Build_StringBuffer
+#endif
+
+typedef struct Build_StringList Build_StringList;
+struct Build_StringList {
+   char** data;
+   int count;
+   int capacity;
+};
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define StringList Build_StringList
+#endif
+
+struct Build_CompileTarget {
+   char* compiler;
+   char* output_name;
+   Build_StringList compile_flags;
+   Build_StringList linker_flags;
+   Build_StringList source_files;
+};
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define CompileTarget Build_CompileTarget
 #endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-BUILD_DEF char* build_append_to_string_buffer_with_count(Build_StringBuffer* buf, const char* arg, int arg_count);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define append_to_string_buffer_with_count build_append_to_string_buffer_with_count
+BUILD_DEF Build_StringBuffer build_string_buffer_new(const char* data);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_buffer_new build_string_buffer_new
 #endif
 
-BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const char* arg);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define append_to_string_buffer build_append_to_string_buffer
+BUILD_DEF Build_StringBuffer build_string_buffer_new_count(const char* data, int count);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_buffer_new_count build_string_buffer_new_count
 #endif
 
-BUILD_DEF void build_free_string_buffer(Build_StringBuffer* buf);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define free_string_buffer build_free_string_buffer
+BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, int count, int capacity);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_buffer_new_capacity build_string_buffer_new_capacity
 #endif
 
-BUILD_DEF int build_append_to_string_list(Build_StringList* list, const char* arg);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define append_to_string_list build_append_to_string_list
+BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_buffer_free build_string_buffer_free
 #endif
 
-BUILD_DEF void build_free_string_list(Build_StringList* list);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define free_string_list build_free_string_list
+BUILD_DEF Build_StringList build_string_list_new(const char** data);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_new build_string_list_new
 #endif
 
-BUILD_DEF int build_set_current_directory(const char* path);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define set_current_directory build_set_current_directory
+BUILD_DEF Build_StringList build_string_list_new_count(const char** data, int count);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_new_count build_string_list_new_count
 #endif
 
-BUILD_DEF int build_new_directory(const char* path);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define new_directory build_new_directory
+BUILD_DEF Build_StringList build_string_list_new_capacity(const char** data, int count, int capacity);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_new_capacity build_string_list_new_capacity
 #endif
 
-/* TODO: implement */
-BUILD_DEF int build_delete_directory(const char* path);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define delete_directory build_delete_directory
+BUILD_DEF void build_string_list_free_all(Build_StringList* l);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_free_all build_string_list_free_all
 #endif
 
-BUILD_DEF int build_count_bytes(const char* s);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define count_bytes build_count_bytes
+BUILD_DEF int build_command_execute(Build_StringList* l);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define command_execute build_command_execute
 #endif
 
-BUILD_DEF char* build_clone_bytes(const char* s);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define clone_bytes build_clone_bytes
-#endif
+BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n);
+BUILD_INTERNAL_DEF char* build__strdup(const char* s);
+BUILD_INTERNAL_DEF int build__strlen(const char* s);
 
-BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, Build_StringBuffer* buf);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define win32_join_and_quote_command_list build_win32_join_and_quote_command_list
-#endif
-
-BUILD_DEF int build_run_command(Build_StringList* list);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define run_command build_run_command
+#if BUILD_OS_WINDOWS
+BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* l);
 #endif
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
-#endif /* BUILD_H_ */
+#endif /* BUILD_H */
 
 #ifdef BUILD_IMPLEMENTATION
-#undef BUILD_IMPLEMENTATION
 
-BUILD_DEF char* build_append_to_string_buffer_with_count(Build_StringBuffer* buf, const char* arg, int arg_count)
+BUILD_DEF Build_StringBuffer build_string_buffer_new(const char* data)
 {
-   int new_count = 0;
-   int i = 0;
-
-   BUILD_ASSERT(buf);
-   BUILD_ASSERT(arg_count >= 0);
-
-   new_count = buf->count + arg_count;
-
-   if (buf->capacity <= 0) {
-      int new_capacity = arg_count + 1;
-      buf->data = (char*)BUILD_MEM_ALLOC(sizeof(*buf->data) * new_capacity);
-      if (!buf->data) {
-         return NULL;
-      }
-      buf->capacity = new_capacity;
-   } else if (buf->capacity <= new_count) {
-      char* tmp = NULL;
-      int new_capacity = buf->capacity * 2;
-      while (new_capacity <= new_count) {
-         new_capacity = new_capacity * 2;
-      }
-      tmp = (char*)BUILD_MEM_REALLOC(buf->data, sizeof(*buf->data) * new_capacity);
-      if (!tmp) {
-         return NULL;
-      }
-      buf->data = tmp;
-      buf->capacity = new_capacity;
-   }
-
-   for (i = 0; i < arg_count; i++) {
-      (buf->data + buf->count)[i] = arg[i];
-   }
-   buf->data[new_count] = '\0';
-   buf->count = new_count;
-
-   return buf->data;
+   return build_string_buffer_new_count(data, build__strlen(data));
 }
 
-BUILD_DEF char* build_append_to_string_buffer(Build_StringBuffer* buf, const char* arg)
+BUILD_DEF Build_StringBuffer build_string_buffer_new_count(const char* data, int count)
 {
-   return build_append_to_string_buffer_with_count(buf, arg, count_bytes(arg));
+   return build_string_buffer_new_capacity(data, count, count + 1);
 }
 
-BUILD_DEF void build_free_string_buffer(Build_StringBuffer* buf)
+BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, int count, int capacity)
 {
-   if (!buf) {
+   Build_StringBuffer result = BUILD__EMPTY_VALUE;
+
+   if (count < 0 || count >= capacity) {
+      /* TODO: logging */
+      return result;
+   }
+
+   result.data = (char*)BUILD_MEM_ALLOC(sizeof(*result.data) * capacity);
+   if (!result.data) {
+      /* TODO: logging */
+      return result;
+   }
+   result.capacity = capacity;
+
+   build__memcpy(result.data, data, count);
+   result.data[count] = '\0';
+   result.count = count;
+
+   return result;
+}
+
+BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s)
+{
+   if (!s) {
+      /* TODO: logging */
       return;
    }
 
-   BUILD_MEM_FREE(buf->data);
-   buf->data = NULL;
-   buf->count = 0;
-   buf->capacity = 0;
+   BUILD_MEM_FREE(s->data, sizeof(*s->data) * s->capacity);
+   s->data = NULL;
+   s->count = 0;
+   s->capacity = 0;
 }
 
-BUILD_DEF int build_append_to_string_list(Build_StringList* list, const char* item)
+BUILD_DEF Build_StringList build_string_list_new(const char** data)
 {
-   char* item_clone = NULL;
+   int count = 0;
+   while (*data++) {
+      count++;
+   }
+   return build_string_list_new_count(data, count);
+}
 
-   BUILD_ASSERT(list);
+BUILD_DEF Build_StringList build_string_list_new_count(const char** data, int count)
+{
+   return build_string_list_new_capacity(data, count, count + 1);
+}
 
-   if (list->capacity == 0) {
-      int new_capacity = 2;
-      list->data = (char**)BUILD_MEM_ALLOC(sizeof(*list->data) * 2);
-      if (!list->data) {
-         /* TODO: logging */
-         return 0;
-      }
-      list->capacity = new_capacity;
-   } else if ((list->count + 1) > (list->capacity))  {
-      int new_capacity = list->capacity * 2;
-      char** tmp = (char**)BUILD_MEM_REALLOC(list->data, sizeof(*list->data) * new_capacity);
+BUILD_DEF Build_StringList build_string_list_new_capacity(const char** data, int count, int capacity)
+{
+   Build_StringList result = BUILD__EMPTY_VALUE;
+
+   if (count < 0 || count >= capacity) {
+      /* TODO: logging */
+      return result;
+   }
+
+   result.data = (char**)BUILD_MEM_ALLOC(sizeof(*result.data) * capacity);
+   if (!result.data) {
+      /* TODO: logging */
+      return result;
+   }
+   result.capacity = capacity;
+
+   for (result.count = 0; result.count < count; result.count++) {
+      char* tmp = build__strdup(data[result.count]);
       if (!tmp) {
          /* TODO: logging */
-         return 0;
+         return result;
       }
-      list->capacity = new_capacity;
-      list->data = tmp;
+      result.data[result.count] = tmp;
    }
+   result.data[result.count] = NULL;
 
-   item_clone = build_clone_bytes(item);
-   if (!item_clone) {
-      /* TODO: logging */
-      return 0;
-   }
-
-   list->data[list->count++] = item_clone;
-   return 1;
-}
-
-BUILD_DEF void build_free_string_list(Build_StringList* list)
-{
-   int i = 0;
-
-   BUILD_ASSERT(list);
-
-   for (i = 0; i < list->capacity; i++) {
-      BUILD_MEM_FREE(list->data[i]);
-      list->data[i] = NULL;
-   }
-   BUILD_MEM_FREE(list->data);
-   list->data = NULL;
-   list->count = 0;
-   list->capacity = 0;
-}
-
-/* TODO: log errors */
-BUILD_DEF int build_new_directory(const char* path)
-{
-   int result = 1;
-   int i = 0;
-   char* path_cstr = build_clone_bytes(path);
-   int path_len = build_count_bytes(path);
-   char temp_char = '\0';
-
-   for (i = 0; i < path_len; i++) {
-      if (path_cstr[i] == '/' || path_cstr[i] == '\\') {
-         temp_char = path_cstr[i];
-         path_cstr[i] = '\0';
-#if BUILD_OS_WINDOWS
-         result = CreateDirectoryA(path_cstr, NULL);
-#else
-         result = mkdir(path_cstr, 0755);
-         result = !result;
-#endif
-         path_cstr[i] = temp_char;
-      } else if (i == (path_len - 1)) {
-#if BUILD_OS_WINDOWS
-         result = CreateDirectoryA(path_cstr, NULL);
-#else
-         result = mkdir(path_cstr, 0755);
-         result = !result;
-#endif
-      }
-
-      if (!result) {
-         /* TODO: ignore "directory already exist" errors, log the rest */
-      }
-   }
-
-   BUILD_MEM_FREE(path_cstr);
    return result;
 }
 
-BUILD_DEF int build_delete_directory(const char* path)
+BUILD_DEF void build_string_list_free_all(Build_StringList* l)
+{
+   int i;
+
+   if (!l || !l->data) {
+      return;
+   }
+
+   for (i = 0; i < l->count; i++) {
+      BUILD_MEM_FREE(l->data[i], sizeof(*l->data[i]) * (build__strlen(l->data[i]) + 1));
+   }
+   BUILD_MEM_FREE(l->data, sizeof(*l->data) * l->capacity);
+   l->data = NULL;
+   l->count = 0;
+   l->capacity = 0;
+}
+
+BUILD_DEF int build_command_execute(Build_StringList* l)
 {
    int result = 0;
-
-   /* TODO implement recursively deleting directory contents */
-
+#if BUILD_OS_WINDOWS
+   result = build__windows_command_execute(l);
+#else
+   result = 0;
+#endif
    return result;
 }
 
-BUILD_DEF int build_count_bytes(const char* s)
+BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* l)
+{
+   return 0; /* TODO: join and quote list of strings and pass string to CreateProcessA */
+}
+
+BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n)
+{
+   int i;
+   for (i = 0; i < n; i++) {
+      ((char*)destination)[i] = ((const char*)source)[i];
+   }
+   return destination;
+}
+
+BUILD_INTERNAL_DEF char* build__strdup(const char* s)
+{
+   char* result = NULL;
+   int s_count = build__strlen(s);
+
+   if (!s) {
+      return NULL;
+   }
+
+   result = (char*)BUILD_MEM_ALLOC(sizeof(*result) * (s_count + 1));
+   if (!result) {
+      return NULL;
+   }
+   build__memcpy(result, s, s_count);
+   result[s_count] = '\0';
+   return result;
+}
+
+BUILD_INTERNAL_DEF int build__strlen(const char* s)
 {
    int len = 0;
    while (*s++) {
       len++;
    }
    return len;
-}
-
-BUILD_DEF char* build_clone_bytes(const char* s)
-{
-   int i = 0;
-   int len = build_count_bytes(s);
-   char* result = (char*)BUILD_MEM_ALLOC(sizeof(*s) * (len + 1));
-   if (!result) {
-      return NULL;
-   }
-
-   for (i = 0; i < len; i++) {
-      result[i] = s[i];
-   }
-   result[len] = '\0';
-
-   return result;
-}
-
-BUILD_DEF void build_win32_join_and_quote_command_list(Build_StringList* list, Build_StringBuffer* buf)
-{
-   int i = 0;
-
-   BUILD_ASSERT(list);
-   BUILD_ASSERT(buf);
-
-   for (i = 0; i < list->count; i++) {
-      int len = build_count_bytes(list->data[i]);
-      int backslashes = 0;
-      int j = 0;
-
-      if (list->data[i] == NULL) {
-         break;
-      }
-
-      if (i > 0) {
-         build_append_to_string_buffer(buf, " ");
-      }
-
-      /* TODO: dont quote if u cant find one of the following chars:  { '\t', '\n', '\v', '\"' }
-      if (len != 0 && strpbrk(list->data[i], " \t\n\v\"")) {
-      } else { // ... everything below ...
-       */
-
-      build_append_to_string_buffer(buf, "\"");
-      for (j = 0; j < len; j++) {
-         char c = list->data[i][j];
-         if (c == '\\') {
-            backslashes++;
-         } else {
-            if (c == '\"') {
-               int k = 0;
-               for (k = 0; k < backslashes + 1; k++) {
-                  build_append_to_string_buffer(buf, "\\");
-               }
-            }
-            backslashes = 0;
-         }
-         build_append_to_string_buffer_with_count(buf, &c, 1);
-      }
-
-      for (j = 0; j < backslashes; j++) {
-         build_append_to_string_buffer(buf, "\\");
-      }
-      build_append_to_string_buffer(buf, "\"");
-   }
-}
-
-BUILD_DEF int build_run_command(Build_StringList* list)
-{
-#if BUILD_OS_WINDOWS
-   Build_StringBuffer cmd = BUILD__EMPTY_VALUE;
-   STARTUPINFO startup = BUILD__EMPTY_VALUE;
-   PROCESS_INFORMATION process = BUILD__EMPTY_VALUE;
-   BOOL ok = FALSE;
-
-   BUILD_ASSERT(list);
-
-   build_win32_join_and_quote_command_list(list, &cmd);
-
-   startup.cb = sizeof(STARTUPINFO);
-   startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-   startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-   startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-   startup.dwFlags |= STARTF_USESTDHANDLES;
-
-   ok = CreateProcessA(NULL, cmd.data, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process);
-   free_string_buffer(&cmd);
-   if (!ok) {
-      /* TODO: handle error */
-   }
-
-   CloseHandle(process.hThread);
-#else
-   return 0;
-#endif
-
-   return 1;
 }
 
 #endif /* BUILD_IMPLEMENTATION */
