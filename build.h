@@ -103,7 +103,7 @@ struct Build_StringList {
 
 struct Build_CompileTarget {
    char* compiler;
-   char* output_name;
+   char* output_parent_and_stem;
    Build_StringList compile_flags;
    Build_StringList linker_flags;
    Build_StringList source_files;
@@ -136,6 +136,16 @@ BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s);
    #define string_buffer_free build_string_buffer_free
 #endif
 
+BUILD_DEF int build_string_buffer_append(Build_StringBuffer* s, const char* arg);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_buffer_append build_string_buffer_append
+#endif
+
+BUILD_DEF int build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_buffer_append_count build_string_buffer_append_count
+#endif
+
 BUILD_DEF Build_StringList build_string_list_new(const char** data);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_new build_string_list_new
@@ -161,18 +171,25 @@ BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg);
    #define string_list_append build_string_list_append
 #endif
 
-BUILD_DEF int build_command_execute(Build_StringList* l);
+BUILD_DEF int build_string_list_append_count(Build_StringList* l, const char* arg, int arg_count);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_append_count build_string_list_append_count
+#endif
+
+BUILD_DEF int build_command_execute(Build_StringList* cmd);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define command_execute build_command_execute
 #endif
 
+BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf);
 BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n);
 BUILD_INTERNAL_DEF char* build__strdup(const char* s);
-BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n);
 BUILD_INTERNAL_DEF int build__strlen(const char* s);
+BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n);
+BUILD_INTERNAL_DEF const char* build__strpbrk(const char* s, char* a);
 
 #if BUILD_OS_WINDOWS
-BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* l);
+BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* cmd);
 #endif
 
 #ifdef __cplusplus
@@ -229,11 +246,55 @@ BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s)
    s->capacity = 0;
 }
 
+BUILD_DEF int build_string_buffer_append(Build_StringBuffer* s, const char* arg)
+{
+   return build_string_buffer_append_count(s, arg, build__strlen(arg));
+}
+
+BUILD_DEF int build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count)
+{
+   int new_count;
+
+   if (!s || s->capacity <= 0) {
+      /* TODO: logging */
+      return 0;
+   }
+
+   new_count = s->count + arg_count;
+   if (new_count >= s->capacity) {
+      int new_capacity = s->capacity * 2;
+      int old_size = sizeof(*s->data) * s->capacity;
+      int new_size;
+      char* tmp;
+
+      while (new_capacity <= new_count) {
+         new_capacity *= 2;
+      }
+      new_size = sizeof(*s->data) * new_capacity;
+
+      tmp = (char*)BUILD_MEM_REALLOC(s->data, new_size, old_size);
+      if (!tmp) {
+         /* TODO: logging */
+         return 0;
+      }
+      s->data = tmp;
+      s->capacity = new_capacity;
+   }
+
+   build__memcpy(s->data + s->count, arg, arg_count);
+   s->count = new_count;
+   s->data[new_count] = '\0';
+
+   return 1;
+}
+
 BUILD_DEF Build_StringList build_string_list_new(const char** data)
 {
    int count = 0;
-   while (data && *data++) {
-      count++;
+   if (data) {
+      while (*data++) {
+         count++;
+      }
    }
    return build_string_list_new_count(data, count);
 }
@@ -291,8 +352,15 @@ BUILD_DEF void build_string_list_free_all(Build_StringList* l)
 
 BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg)
 {
+   return build_string_list_append_count(l, arg, build__strlen(arg));
+}
+
+BUILD_DEF int build_string_list_append_count(Build_StringList* l, const char* arg, int arg_count)
+{
    int new_count = l->count + 1;
    char* arg_clone = NULL;
+
+   BUILD_ASSERT(arg_count >= 0);
 
    if (new_count >= l->capacity) {
       char** tmp;
@@ -312,7 +380,7 @@ BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg)
       l->capacity = new_capacity;
    }
 
-   arg_clone = build__strdup(arg);
+   arg_clone = build__strndup(arg, arg_count);
    if (!arg_clone) {
       /* TODO: logging */
       return 0;
@@ -323,20 +391,15 @@ BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg)
    return 1;
 }
 
-BUILD_DEF int build_command_execute(Build_StringList* l)
+BUILD_DEF int build_command_execute(Build_StringList* cmd)
 {
    int result = 0;
 #if BUILD_OS_WINDOWS
-   result = build__windows_command_execute(l);
+   result = build__windows_command_execute(cmd);
 #else
    result = 0;
 #endif
    return result;
-}
-
-BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* l)
-{
-   return 0; /* TODO: join and quote list of strings and pass string to CreateProcessA */
 }
 
 BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n)
@@ -374,10 +437,122 @@ BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n)
 BUILD_INTERNAL_DEF int build__strlen(const char* s)
 {
    int len = 0;
-   while (*s++) {
-      len++;
+   if (s) {
+      while (*s++) {
+         len++;
+      }
    }
    return len;
 }
+
+BUILD_INTERNAL_DEF const char* build__strpbrk(const char* s, char* a)
+{
+   char* a_orig = a;
+   if (!s || !a) {
+      return NULL;
+   }
+
+   while (*s) {
+      while (*a) {
+         if (*s == *a) {
+            return s;
+         }
+         a++;
+      }
+      a = a_orig;
+      s++;
+   }
+
+   return NULL;
+}
+
+#if BUILD_OS_WINDOWS
+BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* cmd)
+{
+   Build_StringBuffer s = string_buffer_new(NULL);
+
+   if (!build__windows_command_list_join(cmd, &s)) {
+      return 0;
+   }
+
+   return 0; /* TODO: join and quote list of strings and pass string to CreateProcessA */
+}
+
+BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf)
+{
+   int i;
+
+   BUILD_ASSERT(list);
+   BUILD_ASSERT(buf);
+
+   for (i = 0; i < list->count; i++) {
+      int len = build__strlen(list->data[i]);
+      int backslashes = 0;
+      int j = 0;
+
+      if (list->data[i] == NULL) {
+         break;
+      }
+
+      if (i > 0) {
+         if (!build_string_buffer_append(buf, " ")) {
+            /* TODO: logging */
+            return 0;
+         }
+      }
+
+      /* TODO: dont quote if u cant find one of the following chars:  { '\t', '\n', '\v', '\"' }
+      if (len != 0 && strpbrk(list->data[i], " \t\n\v\"")) {
+      } else { // ... everything below ...
+       */
+      if (len != 0 && build__strpbrk(list->data[i], " \t\n\v\"") == NULL) {
+         if (!build_string_buffer_append_count(buf, list->data[i], len)) {
+            /* TODO: logging */
+            return 0;
+         }
+         continue;
+      }
+
+      if (!build_string_buffer_append(buf, "\"")) {
+         /* TODO: logging */
+         return 0;
+      }
+      for (j = 0; j < len; j++) {
+         char c = list->data[i][j];
+         if (c == '\\') {
+            backslashes++;
+         } else {
+            if (c == '\"') {
+               int k = 0;
+               for (k = 0; k < backslashes + 1; k++) {
+                  if (!build_string_buffer_append(buf, "\\")) {
+                     /* TODO: logging */
+                     return 0;
+                  }
+               }
+            }
+            backslashes = 0;
+         }
+         if (!build_string_buffer_append_count(buf, &c, 1)) {
+            /* TODO: logging */
+            return 0;
+         }
+      }
+
+      for (j = 0; j < backslashes; j++) {
+         if (!build_string_buffer_append(buf, "\\")) {
+            /* TODO: logging */
+            return 0;
+         }
+      }
+      if (!build_string_buffer_append(buf, "\"")) {
+         /* TODO: logging */
+         return 0;
+      }
+   }
+
+   return 1;
+}
+#endif /* BUILD_OS_WINDOWS */
 
 #endif /* BUILD_IMPLEMENTATION */

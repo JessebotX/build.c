@@ -23,14 +23,19 @@ int main(int argc, char** argv)
    BUILD_ASSERT(string_list_append(&cmd, "-c"));
    BUILD_ASSERT(string_list_append(&cmd, "build.h"));
    BUILD_ASSERT(string_list_append(&cmd, "-o"));
-   BUILD_ASSERT(string_list_append(&cmd, "build.o"));
+   BUILD_ASSERT(string_list_append(&cmd, "build"));
 
-   for (int i = 0; i < cmd.count; i++) {
-      printf("%s\n", cmd.data[i]);
-   }
+   printf("cmd count: %d\n", cmd.count);
+   printf("cmd capacity: %d\n", cmd.capacity);
 
-   printf("count: %d\n", cmd.count);
-   printf("capacity: %d\n", cmd.capacity);
+   StringBuffer s = string_buffer_new(NULL);
+   BUILD_ASSERT(s.data);
+   BUILD_ASSERT(s.count == 0);
+   BUILD_ASSERT(s.capacity == 1);
+
+   build__windows_command_list_join(&cmd, &s);
+
+   printf("$ %s\n", s.data);
 
    string_list_free_all(&cmd);
 
