@@ -156,6 +156,11 @@ BUILD_DEF void build_string_list_free_all(Build_StringList* l);
    #define string_list_free_all build_string_list_free_all
 #endif
 
+BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_append build_string_list_append
+#endif
+
 BUILD_DEF int build_command_execute(Build_StringList* l);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define command_execute build_command_execute
@@ -163,6 +168,7 @@ BUILD_DEF int build_command_execute(Build_StringList* l);
 
 BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n);
 BUILD_INTERNAL_DEF char* build__strdup(const char* s);
+BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n);
 BUILD_INTERNAL_DEF int build__strlen(const char* s);
 
 #if BUILD_OS_WINDOWS
@@ -226,7 +232,7 @@ BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s)
 BUILD_DEF Build_StringList build_string_list_new(const char** data)
 {
    int count = 0;
-   while (*data++) {
+   while (data && *data++) {
       count++;
    }
    return build_string_list_new_count(data, count);
@@ -283,6 +289,40 @@ BUILD_DEF void build_string_list_free_all(Build_StringList* l)
    l->capacity = 0;
 }
 
+BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg)
+{
+   int new_count = l->count + 1;
+   char* arg_clone = NULL;
+
+   if (new_count >= l->capacity) {
+      char** tmp;
+      int new_capacity = l->capacity * 2;
+      int old_size = sizeof(*l->data) * l->capacity;
+      int new_size = sizeof(*l->data) * new_capacity;
+
+      BUILD_ASSERT(old_size >= 0);
+      BUILD_ASSERT(new_size >= 0 && new_size >= old_size);
+
+      tmp = (char**)BUILD_MEM_REALLOC(l->data, new_size, old_size);
+      if (!tmp) {
+         /* TODO: logging */
+         return 0;
+      }
+      l->data = tmp;
+      l->capacity = new_capacity;
+   }
+
+   arg_clone = build__strdup(arg);
+   if (!arg_clone) {
+      /* TODO: logging */
+      return 0;
+   }
+   l->data[l->count++] = arg_clone;
+   l->data[l->count] = NULL;
+
+   return 1;
+}
+
 BUILD_DEF int build_command_execute(Build_StringList* l)
 {
    int result = 0;
@@ -310,8 +350,13 @@ BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, in
 
 BUILD_INTERNAL_DEF char* build__strdup(const char* s)
 {
+   return build__strndup(s, build__strlen(s));
+}
+
+BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n)
+{
    char* result = NULL;
-   int s_count = build__strlen(s);
+   int s_count = (n >= 0) ? (n) : (1);
 
    if (!s) {
       return NULL;

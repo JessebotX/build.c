@@ -1,19 +1,38 @@
 #define BUILD_IMPLEMENTATION
 #include "build.h"
 
+#include <stdio.h>
+
 int main(int argc, char** argv)
 {
-   StringList cmd = string_list_new_capacity(NULL, 20);
+   StringList cmd = string_list_new(NULL);
 
-#if 0
-   string_list_append(&cmd, "-O0");
-   string_list_append(&cmd, "-g3");
-   string_list_append(&cmd, "demo/main.c");
-   string_list_append(&cmd, "-o");
-   string_list_append(&cmd, "out/demo.exe");
+   BUILD_ASSERT(string_list_append(&cmd, "clang"));
+   BUILD_ASSERT(string_list_append(&cmd, "-DBUILD_IMPLEMENTATION=1"));
+   BUILD_ASSERT(string_list_append(&cmd, "-std=c89"));
+   BUILD_ASSERT(string_list_append(&cmd, "-pedantic"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Wall"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Wextra"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Werror"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Werror=implicit-function-declaration"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Wc++-compat"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-function"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-variable"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-parameter"));
+   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-but-set-variable"));
+   BUILD_ASSERT(string_list_append(&cmd, "-c"));
+   BUILD_ASSERT(string_list_append(&cmd, "build.h"));
+   BUILD_ASSERT(string_list_append(&cmd, "-o"));
+   BUILD_ASSERT(string_list_append(&cmd, "build.o"));
 
-   command_execute(&cmd);
-#endif
+   for (int i = 0; i < cmd.count; i++) {
+      printf("%s\n", cmd.data[i]);
+   }
+
+   printf("count: %d\n", cmd.count);
+   printf("capacity: %d\n", cmd.capacity);
+
+   string_list_free_all(&cmd);
 
    return 0;
 }
