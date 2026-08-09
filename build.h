@@ -1,4 +1,4 @@
-/* build.h -*- mode: c -*-
+/* build.h -*- mode: c -*- https://github.com/JessebotX/build.c
 
 Single header-only C89+ library for writing build recipes.
 
@@ -38,6 +38,16 @@ PERFORMANCE OF THIS SOFTWARE.
    #endif
 #else
    #define BUILD_OS_OTHER 1
+#endif
+
+#if __cplusplus
+   #define BUILD_CPP_VERSION __cplusplus
+#else
+   #ifdef __STDC_VERSION__
+      #define BUILD_C_VERSION __STDC_VERSION__
+   #else
+      #define BUILD_C_VERSION 1
+   #endif
 #endif
 
 #ifndef NULL
@@ -81,6 +91,11 @@ PERFORMANCE OF THIS SOFTWARE.
    #define BUILD__EMPTY_VALUE {0}
 #endif
 
+#if BUILD_OS_WINDOWS
+   #define WIN32_LEAN_AND_MEAN
+   #include <Windows.h>
+#endif
+
 typedef struct Build_StringBuffer Build_StringBuffer;
 struct Build_StringBuffer {
    char* data;
@@ -116,80 +131,144 @@ struct Build_CompileTarget {
 extern "C" {
 #endif
 
+/**
+ * Create a new dynamically-sized null-terminated sequence of bytes
+ * from an existing null-terminated string DATA. DATA can be null to
+ * create an emmpty StringBuffer.
+ */
 BUILD_DEF Build_StringBuffer build_string_buffer_new(const char* data);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_new build_string_buffer_new
 #endif
 
+/**
+ * Create a new dynamically-sized null-terminated sequence of bytes
+ * from an existing string DATA with a byte length of COUNT.
+ */
 BUILD_DEF Build_StringBuffer build_string_buffer_new_count(const char* data, int count);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_new_count build_string_buffer_new_count
 #endif
 
+/**
+ * Create a new dynamically-sized null-terminated sequence of bytes
+ * from an existing string DATA with a byte length of COUNT. Reserve
+ * CAPACITY bytes for future appends.
+ */
 BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, int count, int capacity);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_new_capacity build_string_buffer_new_capacity
 #endif
 
+/**
+ * Release all memory of a StringBuffer.
+ */
 BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_free build_string_buffer_free
 #endif
 
+/**
+ * Append a null-terminated string ARG to a dynamically-sized
+ * null-terminated string S. If memory needs to be reallocated, it may
+ * fail and return 0.
+ */
 BUILD_DEF int build_string_buffer_append(Build_StringBuffer* s, const char* arg);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_append build_string_buffer_append
 #endif
 
+/**
+ * Append string ARG of byte length ARG_COUNT to a dynamically-sized
+ * null-terminated string S. If memory needs to be reallocated, it may
+ * fail and return 0.
+ */
 BUILD_DEF int build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_append_count build_string_buffer_append_count
 #endif
 
+/**
+ * Create a null-terminated array of a null-terminated sequence of
+ * bytes (char[][]) from an existing null-terminated array of
+ * null-terminated strings. DATA can be null to create an empty
+ * StringList.
+ */
 BUILD_DEF Build_StringList build_string_list_new(const char** data);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_new build_string_list_new
 #endif
 
+/**
+ * Create a null-terminated array of a null-terminated sequence of
+ * bytes (char[][]) from an existing array of null-terminated strings,
+ * where DATA is of size COUNT.
+ */
 BUILD_DEF Build_StringList build_string_list_new_count(const char** data, int count);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_new_count build_string_list_new_count
 #endif
 
+/**
+ * Create a null-terminated array of a null-terminated sequence of
+ * bytes (char[][]) from an existing array of null-terminated strings,
+ * where DATA is of size COUNT. Reserve CAPACITY for future appends.
+ */
 BUILD_DEF Build_StringList build_string_list_new_capacity(const char** data, int count, int capacity);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_new_capacity build_string_list_new_capacity
 #endif
 
+/**
+ * Release memory of the entire StringList, including its individual items.
+ */
 BUILD_DEF void build_string_list_free_all(Build_StringList* l);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_free_all build_string_list_free_all
 #endif
 
+/**
+ * Delete all individual items in the StringList.
+ */
+BUILD_DEF void build_string_list_free_items(Build_StringList* l);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_free_items build_string_list_free_items
+#endif
+
+/**
+ * Append null-terminated string ARG to StringList L. If memory needs
+ * to be reallocated, it may fail and return 0.
+ */
 BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_append build_string_list_append
 #endif
 
+/**
+ * Append string ARG of byte length ARG_COUNT to StringList L. If
+ * memory needs to be reallocated, it may fail and return 0.
+ */
 BUILD_DEF int build_string_list_append_count(Build_StringList* l, const char* arg, int arg_count);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_append_count build_string_list_append_count
 #endif
 
-BUILD_DEF int build_command_execute(Build_StringList* cmd);
+/**
+ * Execute a process from a list of arguments CMD.
+ */
+BUILD_DEF int build_process_execute(Build_StringList* cmd);
 #ifndef BUILD_UNSTRIP_PREFIX
-   #define command_execute build_command_execute
+   #define process_execute build_process_execute
 #endif
 
-BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf);
 BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n);
 BUILD_INTERNAL_DEF char* build__strdup(const char* s);
 BUILD_INTERNAL_DEF int build__strlen(const char* s);
 BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n);
-BUILD_INTERNAL_DEF const char* build__strpbrk(const char* s, char* a);
 
 #if BUILD_OS_WINDOWS
-BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* cmd);
+BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf);
+BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* cmd);
 #endif
 
 #ifdef __cplusplus
@@ -350,6 +429,20 @@ BUILD_DEF void build_string_list_free_all(Build_StringList* l)
    l->capacity = 0;
 }
 
+BUILD_DEF void build_string_list_free_items(Build_StringList* l)
+{
+   if (!l || !l->data) {
+      return;
+   }
+
+   for (; l->count-- > 0;) {
+      int i = l->count;
+      BUILD_MEM_FREE(l->data[i], sizeof(*l->data[i]) * (build__strlen(l->data[i]) + 1));
+   }
+   l->count = 0;
+   l->data[l->count] = NULL;
+}
+
 BUILD_DEF int build_string_list_append(Build_StringList* l, const char* arg)
 {
    return build_string_list_append_count(l, arg, build__strlen(arg));
@@ -391,11 +484,11 @@ BUILD_DEF int build_string_list_append_count(Build_StringList* l, const char* ar
    return 1;
 }
 
-BUILD_DEF int build_command_execute(Build_StringList* cmd)
+BUILD_DEF int build_process_execute(Build_StringList* cmd)
 {
    int result = 0;
 #if BUILD_OS_WINDOWS
-   result = build__windows_command_execute(cmd);
+   result = build__windows_process_execute(cmd);
 #else
    result = 0;
 #endif
@@ -445,37 +538,51 @@ BUILD_INTERNAL_DEF int build__strlen(const char* s)
    return len;
 }
 
-BUILD_INTERNAL_DEF const char* build__strpbrk(const char* s, char* a)
-{
-   char* a_orig = a;
-   if (!s || !a) {
-      return NULL;
-   }
-
-   while (*s) {
-      while (*a) {
-         if (*s == *a) {
-            return s;
-         }
-         a++;
-      }
-      a = a_orig;
-      s++;
-   }
-
-   return NULL;
-}
-
 #if BUILD_OS_WINDOWS
-BUILD_INTERNAL_DEF int build__windows_command_execute(Build_StringList* cmd)
+BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* args)
 {
-   Build_StringBuffer s = string_buffer_new(NULL);
+   STARTUPINFO startup = BUILD__EMPTY_VALUE;
+   PROCESS_INFORMATION process = BUILD__EMPTY_VALUE;
+   BOOL ok = FALSE;
+   int result = 0;
+   Build_StringBuffer command_line;
 
-   if (!build__windows_command_list_join(cmd, &s)) {
-      return 0;
+   BUILD_ASSERT(args);
+
+   command_line = string_buffer_new(NULL);
+   if (!build__windows_command_list_join(args, &command_line)) {
+      /* TODO: logging */
+      goto ret;
    }
 
-   return 0; /* TODO: join and quote list of strings and pass string to CreateProcessA */
+   startup.cb = sizeof(STARTUPINFO);
+   startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+   if (startup.hStdOutput == INVALID_HANDLE_VALUE) {
+      /* TODO: logging */
+      goto ret;
+   }
+   startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+   if (startup.hStdInput == INVALID_HANDLE_VALUE) {
+      /* TODO: logging */
+      goto ret;
+   }
+   startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+   if (startup.hStdError == INVALID_HANDLE_VALUE) {
+      /* TODO: logging */
+      goto ret;
+   }
+   startup.dwFlags |= STARTF_USESTDHANDLES;
+
+   if (!CreateProcessA(NULL, command_line.data, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process)) {
+      goto ret;
+   }
+
+   CloseHandle(process.hThread);
+   result = 1;
+
+ret:
+   string_buffer_free(&command_line);
+   return result;
 }
 
 BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf)
@@ -501,22 +608,29 @@ BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, 
          }
       }
 
-      /* TODO: dont quote if u cant find one of the following chars:  { '\t', '\n', '\v', '\"' }
-      if (len != 0 && strpbrk(list->data[i], " \t\n\v\"")) {
-      } else { // ... everything below ...
-       */
-      if (len != 0 && build__strpbrk(list->data[i], " \t\n\v\"") == NULL) {
-         if (!build_string_buffer_append_count(buf, list->data[i], len)) {
-            /* TODO: logging */
-            return 0;
+      if (len != 0) { /* check if string really needs to be quoted/escaped */
+         int k;
+         for (k = 0; k < len; k++) {
+            char it = list->data[i][k];
+            if (it == ' ' || it == '\t' || it == '\f' || it == '\"') {
+               break;
+            }
          }
-         continue;
+
+         if (k >= len) { /* string doesn't need to be quoted/escaped */
+            if (!build_string_buffer_append_count(buf, list->data[i], len)) {
+               /* TODO: logging */
+               return 0;
+            }
+            continue;
+         }
       }
 
       if (!build_string_buffer_append(buf, "\"")) {
          /* TODO: logging */
          return 0;
       }
+
       for (j = 0; j < len; j++) {
          char c = list->data[i][j];
          if (c == '\\') {

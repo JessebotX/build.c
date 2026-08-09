@@ -5,39 +5,75 @@
 
 int main(int argc, char** argv)
 {
-   StringList cmd = string_list_new(NULL);
+   StringList cmd_args = string_list_new(NULL);
+   BUILD_ASSERT(cmd_args.capacity > 0);
 
-   BUILD_ASSERT(string_list_append(&cmd, "clang"));
-   BUILD_ASSERT(string_list_append(&cmd, "-DBUILD_IMPLEMENTATION=1"));
-   BUILD_ASSERT(string_list_append(&cmd, "-std=c89"));
-   BUILD_ASSERT(string_list_append(&cmd, "-pedantic"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Wall"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Wextra"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Werror"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Werror=implicit-function-declaration"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Wc++-compat"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-function"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-variable"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-parameter"));
-   BUILD_ASSERT(string_list_append(&cmd, "-Wno-unused-but-set-variable"));
-   BUILD_ASSERT(string_list_append(&cmd, "-c"));
-   BUILD_ASSERT(string_list_append(&cmd, "build.h"));
-   BUILD_ASSERT(string_list_append(&cmd, "-o"));
-   BUILD_ASSERT(string_list_append(&cmd, "build"));
+   {
+      BUILD_ASSERT(string_list_append(&cmd_args, "clang"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-DBUILD_IMPLEMENTATION=1"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-std=c89"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-pedantic"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wall"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wextra"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Werror"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Werror=implicit-function-declaration"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wc++-compat"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-function"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-variable"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-parameter"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-but-set-variable"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-c"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "build.h"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-o"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "build.clang.o"));
 
-   printf("cmd count: %d\n", cmd.count);
-   printf("cmd capacity: %d\n", cmd.capacity);
+      process_execute(&cmd_args);
 
-   StringBuffer s = string_buffer_new(NULL);
-   BUILD_ASSERT(s.data);
-   BUILD_ASSERT(s.count == 0);
-   BUILD_ASSERT(s.capacity == 1);
+      string_list_free_items(&cmd_args);
+   }
 
-   build__windows_command_list_join(&cmd, &s);
+   {
+      BUILD_ASSERT(string_list_append(&cmd_args, "clang++"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-DBUILD_IMPLEMENTATION=1"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-std=c++11"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-pedantic"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wall"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wextra"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Werror"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Werror=implicit-function-declaration"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wc++-compat"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-deprecated"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-function"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-variable"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-parameter"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-Wno-unused-but-set-variable"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-c"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "build.h"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-o"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "build.clang.cpp.o"));
 
-   printf("$ %s\n", s.data);
+      process_execute(&cmd_args);
 
-   string_list_free_all(&cmd);
+      string_list_free_items(&cmd_args);
+   }
+
+   {
+
+      BUILD_ASSERT(string_list_append(&cmd_args, "tcc"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "build.c"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "-o"));
+      BUILD_ASSERT(string_list_append(&cmd_args, "build-tcc-test.exe"));
+
+      process_execute(&cmd_args);
+
+      string_list_free_items(&cmd_args);
+   }
+
+   printf("== END ==\n", cmd_args.count);
+   printf("cmd_args.count = %d\n", cmd_args.count);
+   printf("cmd_args.capacity = %d\n", cmd_args.capacity);
+
+   string_list_free_all(&cmd_args);
 
    return 0;
 }
