@@ -63,6 +63,8 @@ PERFORMANCE OF THIS SOFTWARE.
 #endif
 
 #ifndef BUILD_NO_STDINC
+   #include <stdarg.h>
+
    #ifndef BUILD_ASSERT
       #include <assert.h>
       #define BUILD_ASSERT(condition) assert((condition))
@@ -128,7 +130,7 @@ struct Build_CompileTarget {
    #define CompileTarget Build_CompileTarget
 #endif
 
-#ifdef BUILD_CPP_VERSION
+#if BUILD_CPP_VERSION
 extern "C" {
 #endif
 
@@ -208,6 +210,13 @@ BUILD_DEF Build_StringList build_string_list_new(const char* const* data);
    #define string_list_new build_string_list_new
 #endif
 
+#ifndef BUILD_NO_STDINC
+BUILD_DEF Build_StringList build_string_list_new_variable(const char* item1, ...);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_new_variable build_string_list_new_variable
+#endif
+#endif
+
 /**
  * Create a null-terminated array of a null-terminated sequence of
  * bytes (char[][]) from an existing array of null-terminated strings,
@@ -253,6 +262,13 @@ BUILD_DEF int build_string_list_append_string(Build_StringList* l, const char* a
    #define string_list_append_string build_string_list_append_string
 #endif
 
+#ifndef BUILD_NO_STDINC
+BUILD_DEF int build_string_list_append_string_variable(Build_StringList* l, ...);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define string_list_append_string_variable build_string_list_append_string_variable
+#endif
+#endif
+
 /**
  * Append string ARG of byte length ARG_COUNT to StringList L. If
  * memory needs to be reallocated, it may fail and return 0.
@@ -282,7 +298,7 @@ BUILD_DEF int build_process_execute(Build_StringList* cmd);
 /**
  * Create executable from CompileTarget
  */
-BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target, const char* executable_stem);
+BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target, const char* exe_stem);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define target_compile_executable build_target_compile_executable
 #endif
@@ -297,7 +313,7 @@ BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, 
 BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* cmd);
 #endif
 
-#ifdef BUILD_CPP_VERSION
+#if BUILD_CPP_VERSION
 } /* extern "C" */
 #endif
 
@@ -417,6 +433,36 @@ BUILD_DEF Build_StringList build_string_list_new(const char* const* data)
    return build_string_list_new_count(data, count);
 }
 
+#ifndef BUILD_NO_STDINC
+BUILD_DEF Build_StringList build_string_list_new_variable(const char* item1, ...)
+{
+   va_list args;
+   const char* arg;
+   Build_StringList error_result = BUILD__EMPTY_VALUE;
+   Build_StringList result = build_string_list_new(NULL); /* TODO: reduce allocations */
+
+   if (!item1) {
+      return result;
+   }
+
+   if (!build_string_list_append_string(&result, item1)) {
+      /* TODO: logging */
+      return error_result;
+   }
+
+   va_start(args, item1);
+   while((arg = va_arg(args, const char*))) {
+      if (!build_string_list_append_string(&result, arg)) {
+         /* TODO: logging */
+         return error_result;
+      }
+   }
+   va_end(args);
+
+   return result;
+}
+#endif
+
 BUILD_DEF Build_StringList build_string_list_new_count(const char* const* data, int count)
 {
    return build_string_list_new_capacity(data, count, count + 1);
@@ -486,6 +532,24 @@ BUILD_DEF int build_string_list_append_string(Build_StringList* l, const char* a
 {
    return build_string_list_append_string_count(l, arg, build__strlen(arg));
 }
+
+#ifndef BUILD_NO_STDINC
+BUILD_DEF int build_string_list_append_string_variable(Build_StringList* l, ...)
+{
+   const char* arg;
+   va_list args;
+
+   va_start(args, l);
+   while ((arg = va_arg(args, const char*))) {
+      if (!build_string_list_append_string(l, arg)) {
+         /* TODO: logging */
+         return 0;
+      }
+   }
+   va_end(args);
+   return 1;
+}
+#endif
 
 BUILD_DEF int build_string_list_append_string_count(Build_StringList* l, const char* arg, int arg_count)
 {
@@ -589,6 +653,7 @@ BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target,
    int result = 0;
 
    BUILD_ASSERT(target);
+   BUILD_ASSERT(exe_stem); /* TODO: default exe name (probably use parent dir?) */
 
    command_args = build_string_list_new(NULL); /* TODO: preallocate memory? */
    if (!command_args.data) {
