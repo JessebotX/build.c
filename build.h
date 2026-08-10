@@ -85,7 +85,7 @@ PERFORMANCE OF THIS SOFTWARE.
    #endif
 #endif
 
-#if __STDC_VERSION__ >= 202311L || __cplusplus >= 201103L
+#if BUILD_C_VERSION >= 202311L || BUILD_CPP_VERSION >= 201103L
    #define BUILD__EMPTY_VALUE {}
 #else
    #define BUILD__EMPTY_VALUE {0}
@@ -116,6 +116,7 @@ struct Build_StringList {
    #define StringList Build_StringList
 #endif
 
+typedef struct Build_CompileTarget Build_CompileTarget;
 struct Build_CompileTarget {
    char* compiler;
    char* output_parent_and_stem;
@@ -127,7 +128,7 @@ struct Build_CompileTarget {
    #define CompileTarget Build_CompileTarget
 #endif
 
-#ifdef __cplusplus
+#ifdef BUILD_CPP_VERSION
 extern "C" {
 #endif
 
@@ -278,17 +279,25 @@ BUILD_DEF int build_process_execute(Build_StringList* cmd);
    #define process_execute build_process_execute
 #endif
 
+/**
+ * Create executable from CompileTarget
+ */
+BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target, const char* executable_stem);
+#ifndef BUILD_UNSTRIP_PREFIX
+   #define target_compile_executable build_target_compile_executable
+#endif
+
 BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n);
 BUILD_INTERNAL_DEF char* build__strdup(const char* s);
-BUILD_INTERNAL_DEF int build__strlen(const char* s);
 BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n);
+BUILD_INTERNAL_DEF int build__strlen(const char* s);
 
 #if BUILD_OS_WINDOWS
 BUILD_INTERNAL_DEF int build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf);
 BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* cmd);
 #endif
 
-#ifdef __cplusplus
+#ifdef BUILD_CPP_VERSION
 } /* extern "C" */
 #endif
 
@@ -572,6 +581,69 @@ BUILD_DEF int build_process_execute(Build_StringList* cmd)
    return result;
 }
 
+BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target, const char* exe_stem)
+{
+   Build_StringList command_args;
+   Build_StringBuffer exe_path;
+   int exe_stem_count = build__strlen(exe_stem);
+   int result = 0;
+
+   BUILD_ASSERT(target);
+
+   command_args = build_string_list_new(NULL); /* TODO: preallocate memory? */
+   if (!command_args.data) {
+      goto ret;
+   }
+
+   /* TODO: check if compiler is MSVC */
+
+   /* TODO: platform specific function to create exe_path */
+   exe_path = build_string_buffer_new_capacity(exe_stem, exe_stem_count, exe_stem_count + sizeof(".exe"));
+   if (!exe_path.data) {
+      goto ret_cleanup_list;
+   }
+   if (!build_string_buffer_append(&exe_path, ".exe")) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   if (!build_string_list_append_string(&command_args, target->compiler)) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   if (!build_string_list_append_list(&command_args, &target->compile_flags)) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   if (!build_string_list_append_list(&command_args, &target->linker_flags)) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   if (!build_string_list_append_list(&command_args, &target->source_files)) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   if (!build_string_list_append_string(&command_args, "-o")) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   if (!build_string_list_append_string_count(&command_args, exe_path.data, exe_path.count)) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   if (!build_process_execute(&command_args)) {
+      goto ret_cleanup_list_and_buffer;
+   }
+
+   result = 1;
+
+ret_cleanup_list_and_buffer:
+   build_string_buffer_free(&exe_path);
+ret_cleanup_list:
+   build_string_list_free_all(&command_args);
+ret:
+   return result;
+}
+
 BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n)
 {
    int i;
@@ -651,6 +723,7 @@ BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* args)
    startup.dwFlags |= STARTF_USESTDHANDLES;
 
    if (!CreateProcessA(NULL, command_line.data, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process)) {
+      /* TODO: logging */
       goto ret;
    }
 

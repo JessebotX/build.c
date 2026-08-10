@@ -5,6 +5,7 @@
 
 int main(int argc, char** argv)
 {
+#if 0
    StringList cmd_args = string_list_new(NULL);
    BUILD_ASSERT(cmd_args.capacity > 0);
 
@@ -97,6 +98,30 @@ int main(int argc, char** argv)
       printf("list1 capacity: %d\n", list1.capacity);
 
       string_list_free_all(&list1);
+   }
+#endif
+
+   {
+      CompileTarget target = {
+         .compiler = "clang",
+         .compile_flags = string_list_new(NULL),
+         .linker_flags = string_list_new(NULL),
+         .source_files = string_list_new(NULL),
+      };
+      BUILD_ASSERT(&target.compile_flags);
+      BUILD_ASSERT(&target.linker_flags);
+      BUILD_ASSERT(&target.source_files);
+
+      BUILD_ASSERT(string_list_append_string(&target.compile_flags, "-Wall"));
+      BUILD_ASSERT(string_list_append_string(&target.compile_flags, "-Wextra"));
+      BUILD_ASSERT(string_list_append_string(&target.compile_flags, "-Wno-unused-function"));
+      BUILD_ASSERT(string_list_append_string(&target.compile_flags, "-Wno-unused-parameter"));
+      BUILD_ASSERT(string_list_append_string(&target.compile_flags, "-Wno-unused-variable"));
+      BUILD_ASSERT(string_list_append_string(&target.compile_flags, "-Wno-unused-but-set-variable"));
+
+      BUILD_ASSERT(string_list_append_string(&target.source_files, "build.c"));
+
+      BUILD_ASSERT(target_compile_executable(&target, "build-target-test"));
    }
 
    return 0;
