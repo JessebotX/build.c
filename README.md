@@ -34,10 +34,15 @@ int main(int argc, char** argv)
          "-g3",
          NULL
       ),
-      .source_files = string_list_new_varargs("main.c", "base.c", NULL),
+      .source_files = string_list_new_varargs(
+         "main.c",
+         "base.c",
+         NULL
+      ),
    };
 
-   target_compile_executable(&target, "my_exe_name"); // on Windows, .exe is automatically appended onto the name
+   // on Windows, .exe is automatically appended onto the name
+   target_compile_executable(&target, "my_exe_name");
 
    return 0;
 }
