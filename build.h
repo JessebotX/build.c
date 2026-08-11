@@ -2,7 +2,7 @@
 
   Single header-only C89+ library for writing build recipes.
 
-# LICENSE
+# License
 
   SPDX-License-Identifier: 0BSD
 
@@ -26,7 +26,7 @@
 
 #define BUILD_VERSION_MAJOR 0
 #define BUILD_VERSION_MINOR 1
-#define BUILD_VERSION_PATCH 0
+#define BUILD_VERSION_PATCH 1
 
 #if !BUILD_OS_OTHER
    #if defined(_WIN32) || defined(_WIN64)
@@ -68,12 +68,6 @@
    #ifndef BUILD_ASSERT
       #include <assert.h>
       #define BUILD_ASSERT(condition) assert((condition))
-
-      #ifndef BUILD_UNSTRIP_PREFIX
-         #ifndef ASSERT
-            #define ASSERT BUILD_ASSERT
-         #endif
-      #endif
    #endif
 
    #if !defined(BUILD_MEM_ALLOC) || !defined(BUILD_MEM_REALLOC) || !defined(BUILD_MEM_FREE)
@@ -173,9 +167,9 @@ BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, 
 /**
  * Release all memory of a StringBuffer.
  */
-BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s);
+BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s);
 #ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_free build_string_buffer_free
+   #define string_buffer_delete build_string_buffer_delete
 #endif
 
 /**
@@ -250,17 +244,17 @@ BUILD_DEF Build_StringList build_string_list_new_capacity(const char* const* dat
 /**
  * Release memory of the entire StringList, including its individual items.
  */
-BUILD_DEF void build_string_list_free_all(Build_StringList* l);
+BUILD_DEF void build_string_list_delete_all(Build_StringList* l);
 #ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_free_all build_string_list_free_all
+   #define string_list_delete_all build_string_list_delete_all
 #endif
 
 /**
  * Delete all individual items in the StringList.
  */
-BUILD_DEF void build_string_list_free_items(Build_StringList* l);
+BUILD_DEF void build_string_list_delete_items(Build_StringList* l);
 #ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_free_items build_string_list_free_items
+   #define string_list_delete_items build_string_list_delete_items
 #endif
 
 /**
@@ -368,7 +362,7 @@ BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, 
    return result;
 }
 
-BUILD_DEF void build_string_buffer_free(Build_StringBuffer* s)
+BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s)
 {
    BUILD_ASSERT(s && s->data && "uninitialized");
 
@@ -483,7 +477,7 @@ BUILD_DEF Build_StringList build_string_list_new_capacity(const char* const* dat
    return result;
 }
 
-BUILD_DEF void build_string_list_free_all(Build_StringList* l)
+BUILD_DEF void build_string_list_delete_all(Build_StringList* l)
 {
    int i;
 
@@ -498,7 +492,7 @@ BUILD_DEF void build_string_list_free_all(Build_StringList* l)
    l->capacity = 0;
 }
 
-BUILD_DEF void build_string_list_free_items(Build_StringList* l)
+BUILD_DEF void build_string_list_delete_items(Build_StringList* l)
 {
    if (!l || !l->data) {
       return;
@@ -525,6 +519,8 @@ BUILD_DEF void build_string_list_append_string_variable(Build_StringList* l, ...
    const char* arg;
    va_list args;
 
+   BUILD_ASSERT(l && "missing string list");
+
    va_start(args, l);
    while ((arg = va_arg(args, const char*))) {
       build_string_list_append_string(l, arg);
@@ -542,7 +538,10 @@ BUILD_DEF void build_string_list_append_string_count(Build_StringList* l, const 
    BUILD_ASSERT(arg_count >= 0);
 
    new_count = l->count + 1;
-   if (new_count >= l->capacity) {
+   if (l->capacity == 0) {
+      l->data = (char**)BUILD_MEM_ALLOC(sizeof(*l->data) * (new_count + 1));
+      BUILD_ASSERT(l->data && "allocation failure");
+   } else if (new_count >= l->capacity) {
       char** tmp;
       int new_capacity = l->capacity * 2;
       int old_size = sizeof(*l->data) * l->capacity;
@@ -563,6 +562,7 @@ BUILD_DEF void build_string_list_append_string_count(Build_StringList* l, const 
    l->data[l->count] = NULL;
 }
 
+/* TODO: support uninitialized string lists */
 BUILD_DEF void build_string_list_append_list(Build_StringList* l, const Build_StringList* args)
 {
    int old_count;
@@ -653,9 +653,9 @@ BUILD_DEF int build_target_compile_object(const Build_CompileTarget* target, con
    result = 1;
 
 ret_cleanup_list_and_buffer:
-   build_string_buffer_free(&obj_path);
+   build_string_buffer_delete(&obj_path);
 ret_cleanup_list:
-   build_string_list_free_all(&command_args);
+   build_string_list_delete_all(&command_args);
 ret:
    return result;
 }
@@ -700,9 +700,9 @@ BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target,
    result = 1;
 
 ret_cleanup_list_and_buffer:
-   build_string_buffer_free(&exe_path);
+   build_string_buffer_delete(&exe_path);
 ret_cleanup_list:
-   build_string_list_free_all(&command_args);
+   build_string_list_delete_all(&command_args);
 ret:
    return result;
 }
@@ -789,7 +789,7 @@ BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* args)
    result = 1;
 
 ret:
-   string_buffer_free(&command_line);
+   string_buffer_delete(&command_line);
    return result;
 }
 

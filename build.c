@@ -20,7 +20,7 @@ int main(int argc, char** argv)
       .source_files = string_list_new_variable("build.h", NULL),
    };
 
-   ASSERT(target_compile_object(&target, "build"));
+   target_compile_object(&target, "build");
 
    return 0;
 }
