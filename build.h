@@ -34,7 +34,7 @@
          #define BUILD_OS_WINDOWS 1
       #endif
    #else
-      #error OS unsupported by default
+      #error OS unsupported by default (disable error by setting BUILD_OS_OTHER=1)
    #endif
 #else
    #define BUILD_OS_OTHER 1
@@ -100,6 +100,9 @@
    #include <Windows.h>
 #endif
 
+/**
+ * Dynamically-sized null-terminated sequence of bytes (char[]).
+ */
 typedef struct Build_StringBuffer Build_StringBuffer;
 struct Build_StringBuffer {
    char* data;
@@ -110,6 +113,9 @@ struct Build_StringBuffer {
    #define StringBuffer Build_StringBuffer
 #endif
 
+/**
+ * Dynamically-sized null-terminated array containing null-terminated sequences of bytes (char[][]).
+ */
 typedef struct Build_StringList Build_StringList;
 struct Build_StringList {
    char** data;
@@ -120,6 +126,9 @@ struct Build_StringList {
    #define StringList Build_StringList
 #endif
 
+/**
+ * Collection of source files and compiler settings.
+ */
 typedef struct Build_CompileTarget Build_CompileTarget;
 struct Build_CompileTarget {
    char* compiler;
@@ -138,7 +147,7 @@ extern "C" {
 /**
  * Create a new dynamically-sized null-terminated sequence of bytes
  * from an existing null-terminated string DATA. DATA can be null to
- * create an emmpty StringBuffer.
+ * create an empty StringBuffer.
  */
 BUILD_DEF Build_StringBuffer build_string_buffer_new(const char* data);
 #ifndef BUILD_UNSTRIP_PREFIX
@@ -165,7 +174,7 @@ BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, 
 #endif
 
 /**
- * Release all memory of a StringBuffer.
+ * Release all memory of S.
  */
 BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s);
 #ifndef BUILD_UNSTRIP_PREFIX
@@ -173,7 +182,7 @@ BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s);
 #endif
 
 /**
- * Empty out StringBuffer.
+ * Clear contents in S.
  */
 BUILD_DEF void build_string_buffer_clear(Build_StringBuffer* s);
 #ifndef BUILD_UNSTRIP_PREFIX
@@ -184,7 +193,7 @@ BUILD_DEF void build_string_buffer_clear(Build_StringBuffer* s);
  * Append a null-terminated string ARG to a dynamically-sized
  * null-terminated string S.
  */
-BUILD_DEF void build_string_buffer_append(Build_StringBuffer* s, const char* arg);
+BUILD_DEF Build_StringBuffer build_string_buffer_append(Build_StringBuffer* s, const char* arg);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_append build_string_buffer_append
 #endif
@@ -193,7 +202,7 @@ BUILD_DEF void build_string_buffer_append(Build_StringBuffer* s, const char* arg
  * Append string ARG of byte length ARG_COUNT to a dynamically-sized
  * null-terminated string S.
  */
-BUILD_DEF void build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count);
+BUILD_DEF Build_StringBuffer build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_buffer_append_count build_string_buffer_append_count
 #endif
@@ -215,9 +224,9 @@ BUILD_DEF Build_StringList build_string_list_new(const char* const* data);
  * (char[][]) from variable number of arguments. The last argument
  * must be NULL.
  */
-BUILD_DEF Build_StringList build_string_list_new_variable(const char* item1, ...);
+BUILD_DEF Build_StringList build_string_list_new_varargs(const char* item1, ...);
 #ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_new_variable build_string_list_new_variable
+   #define string_list_new_varargs build_string_list_new_varargs
 #endif
 #endif
 
@@ -242,7 +251,7 @@ BUILD_DEF Build_StringList build_string_list_new_capacity(const char* const* dat
 #endif
 
 /**
- * Release memory of the entire StringList, including its individual items.
+ * Release all memory in L, including its individual items.
  */
 BUILD_DEF void build_string_list_delete_all(Build_StringList* l);
 #ifndef BUILD_UNSTRIP_PREFIX
@@ -250,7 +259,7 @@ BUILD_DEF void build_string_list_delete_all(Build_StringList* l);
 #endif
 
 /**
- * Delete all individual items in the StringList.
+ * Release memory of all individual items in L, but keep L's own memory.
  */
 BUILD_DEF void build_string_list_delete_items(Build_StringList* l);
 #ifndef BUILD_UNSTRIP_PREFIX
@@ -258,9 +267,9 @@ BUILD_DEF void build_string_list_delete_items(Build_StringList* l);
 #endif
 
 /**
- * Append a null-terminated string ARG to StringList L.
+ * Append a null-terminated string ARG to L.
  */
-BUILD_DEF void build_string_list_append_string(Build_StringList* l, const char* arg);
+BUILD_DEF Build_StringList build_string_list_append_string(Build_StringList* l, const char* arg);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_append_string build_string_list_append_string
 #endif
@@ -270,24 +279,24 @@ BUILD_DEF void build_string_list_append_string(Build_StringList* l, const char* 
  * Append a variable number of null-terminated string arguments to L.
  * The last argument must be NULL.
  */
-BUILD_DEF void build_string_list_append_string_variable(Build_StringList* l, ...);
+BUILD_DEF Build_StringList build_string_list_append_string_varargs(Build_StringList* l, ...);
 #ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_append_string_variable build_string_list_append_string_variable
+   #define string_list_append_string_varargs build_string_list_append_string_varargs
 #endif
 #endif
 
 /**
- * Append string ARG of byte length ARG_COUNT to StringList L.
+ * Append string ARG of byte length ARG_COUNT to L.
  */
-BUILD_DEF void build_string_list_append_string_count(Build_StringList* l, const char* arg, int arg_count);
+BUILD_DEF Build_StringList build_string_list_append_string_count(Build_StringList* l, const char* arg, int arg_count);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_append_string_count build_string_list_append_string_count
 #endif
 
 /**
- * Append StringList ARG to StringList L.
+ * Append ARG to L.
  */
-BUILD_DEF void build_string_list_append_list(Build_StringList* l, const Build_StringList* arg);
+BUILD_DEF Build_StringList build_string_list_append_list(Build_StringList* l, const Build_StringList* arg);
 #ifndef BUILD_UNSTRIP_PREFIX
    #define string_list_append_list build_string_list_append_list
 #endif
@@ -364,7 +373,9 @@ BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, 
 
 BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s)
 {
-   BUILD_ASSERT(s && s->data && "uninitialized");
+   if (!s || !s->data) {
+      return;
+   }
 
    BUILD_MEM_FREE(s->data, sizeof(*s->data) * s->capacity);
    s->data = NULL;
@@ -374,7 +385,9 @@ BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s)
 
 BUILD_DEF void build_string_buffer_clear(Build_StringBuffer* s)
 {
-   BUILD_ASSERT(s && s->data && "uninitialized");
+   if (!s || !s->data) {
+      return;
+   }
 
    while (s->count-- > 0) {
       s->data[s->count] = 0;
@@ -382,19 +395,28 @@ BUILD_DEF void build_string_buffer_clear(Build_StringBuffer* s)
    s->count = 0;
 }
 
-BUILD_DEF void build_string_buffer_append(Build_StringBuffer* s, const char* arg)
+BUILD_DEF Build_StringBuffer build_string_buffer_append(Build_StringBuffer* s, const char* arg)
 {
-   build_string_buffer_append_count(s, arg, build__strlen(arg));
+   return build_string_buffer_append_count(s, arg, build__strlen(arg));
 }
 
-BUILD_DEF void build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count)
+BUILD_DEF Build_StringBuffer build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count)
 {
    int new_count;
 
-   BUILD_ASSERT(s && s->data && "uninitialized");
+   if (!s) {
+      return build_string_buffer_new_count(arg, arg_count);
+   }
 
    new_count = s->count + arg_count;
-   if (new_count >= s->capacity) {
+   if (s->capacity == 0) {
+      int new_capacity = new_count + 1;
+
+      s->data = (char*)BUILD_MEM_ALLOC(sizeof(*s->data) * new_capacity);
+      BUILD_ASSERT(s->data && "allocation failure");
+
+      s->capacity = new_capacity;
+   } else if (new_count >= s->capacity) {
       int new_capacity = s->capacity * 2;
       int old_size = sizeof(*s->data) * s->capacity;
       int new_size;
@@ -416,6 +438,8 @@ BUILD_DEF void build_string_buffer_append_count(Build_StringBuffer* s, const cha
    build__memcpy(s->data + s->count, arg, arg_count);
    s->count = new_count;
    s->data[new_count] = '\0';
+
+   return *s;
 }
 
 /* TODO: non-null data doesn't seem to work correctly */
@@ -431,7 +455,7 @@ BUILD_DEF Build_StringList build_string_list_new(const char* const* data)
 }
 
 #ifndef BUILD_NO_STDINC
-BUILD_DEF Build_StringList build_string_list_new_variable(const char* item1, ...)
+BUILD_DEF Build_StringList build_string_list_new_varargs(const char* item1, ...)
 {
    va_list args;
    const char* arg;
@@ -481,7 +505,9 @@ BUILD_DEF void build_string_list_delete_all(Build_StringList* l)
 {
    int i;
 
-   BUILD_ASSERT(l && l->data && "uninitialized");
+   if (!l || !l->data) {
+      return;
+   }
 
    for (i = 0; i < l->count; i++) {
       BUILD_MEM_FREE(l->data[i], sizeof(*l->data[i]) * (build__strlen(l->data[i]) + 1));
@@ -508,34 +534,37 @@ BUILD_DEF void build_string_list_delete_items(Build_StringList* l)
    l->data[l->count] = NULL;
 }
 
-BUILD_DEF void build_string_list_append_string(Build_StringList* l, const char* arg)
+BUILD_DEF Build_StringList build_string_list_append_string(Build_StringList* l, const char* arg)
 {
-   build_string_list_append_string_count(l, arg, build__strlen(arg));
+   return build_string_list_append_string_count(l, arg, build__strlen(arg));
 }
 
 #ifndef BUILD_NO_STDINC
-BUILD_DEF void build_string_list_append_string_variable(Build_StringList* l, ...)
+BUILD_DEF Build_StringList build_string_list_append_string_varargs(Build_StringList* l, ...)
 {
    const char* arg;
    va_list args;
-
-   BUILD_ASSERT(l && "missing string list");
+   Build_StringList result;
 
    va_start(args, l);
    while ((arg = va_arg(args, const char*))) {
-      build_string_list_append_string(l, arg);
+      result = build_string_list_append_string(l, arg);
    }
    va_end(args);
+
+   return result;
 }
 #endif
 
-BUILD_DEF void build_string_list_append_string_count(Build_StringList* l, const char* arg, int arg_count)
+BUILD_DEF Build_StringList build_string_list_append_string_count(Build_StringList* l, const char* arg, int arg_count)
 {
    int new_count;
    char* arg_clone = NULL;
 
-   BUILD_ASSERT(l && l->data);
-   BUILD_ASSERT(arg_count >= 0);
+   if (!l) {
+      Build_StringList result = build_string_list_new(NULL);
+      return build_string_list_append_string_count(&result, arg, arg_count);
+   }
 
    new_count = l->count + 1;
    if (l->capacity == 0) {
@@ -560,21 +589,35 @@ BUILD_DEF void build_string_list_append_string_count(Build_StringList* l, const 
    arg_clone = build__strndup(arg, arg_count);
    l->data[l->count++] = arg_clone;
    l->data[l->count] = NULL;
+
+   return *l;
 }
 
-/* TODO: support uninitialized string lists */
-BUILD_DEF void build_string_list_append_list(Build_StringList* l, const Build_StringList* args)
+BUILD_DEF Build_StringList build_string_list_append_list(Build_StringList* l, const Build_StringList* args)
 {
    int old_count;
    int new_count;
    int i;
 
-   BUILD_ASSERT(l && l->data && l->capacity > 0);
-   BUILD_ASSERT(args->data && args->capacity > 0);
+   if (!l) {
+      Build_StringList result = build_string_list_new(NULL);
+      return build_string_list_append_list(&result, args);
+   }
+
+   if (!args || !args->data || args->count == 0) {
+      return *l;
+   }
 
    old_count = l->count;
    new_count = l->count + args->count;
-   if (new_count >= l->capacity) {
+   if (l->capacity == 0) {
+      int new_capacity = new_count + 1;
+
+      l->data = (char**)BUILD_MEM_ALLOC(sizeof(*l->data) * new_capacity);
+      BUILD_ASSERT(l->data && "allocation failure");
+
+      l->capacity = new_capacity;
+   } else if (new_count >= l->capacity) {
       char** tmp;
       int new_capacity = l->capacity * 2;
       int old_size;
@@ -600,6 +643,8 @@ BUILD_DEF void build_string_list_append_list(Build_StringList* l, const Build_St
       l->data[i] = arg_clone;
    }
    l->data[l->count] = NULL;
+
+   return *l;
 }
 
 BUILD_DEF int build_process_execute(Build_StringList* cmd)
@@ -628,9 +673,8 @@ BUILD_DEF int build_target_compile_object(const Build_CompileTarget* target, con
       goto ret;
    }
 
-   /* TODO: check if compiler is MSVC */
+   /* TODO: check if compiler is MSVC (create a macro defining compiler command format) */
 
-   /* TODO: platform specific function to create exe_path */
    obj_path = build_string_buffer_new_capacity(obj_stem, obj_stem_count, obj_stem_count + sizeof(".o"));
    if (!obj_path.data) {
       goto ret_cleanup_list;
@@ -671,11 +715,8 @@ BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target,
    BUILD_ASSERT(exe_stem); /* TODO: default exe name (probably use parent dir?) */
 
    command_args = build_string_list_new(NULL); /* TODO: preallocate memory? */
-   if (!command_args.data) {
-      goto ret;
-   }
 
-   /* TODO: check if compiler is MSVC */
+   /* TODO: check if compiler is MSVC (create a macro defining compiler command format) */
 
    /* TODO: platform specific function to create exe_path */
    exe_path = build_string_buffer_new_capacity(exe_stem, exe_stem_count, exe_stem_count + sizeof(".exe"));
@@ -703,7 +744,6 @@ ret_cleanup_list_and_buffer:
    build_string_buffer_delete(&exe_path);
 ret_cleanup_list:
    build_string_list_delete_all(&command_args);
-ret:
    return result;
 }
 

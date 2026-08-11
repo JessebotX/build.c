@@ -5,7 +5,7 @@ int main(int argc, char** argv)
 {
    CompileTarget target = {
       .compiler = "clang",
-      .compile_flags = string_list_new_variable(
+      .compile_flags = string_list_new_varargs(
          "-std=c89",
          "-pedantic",
          "-Wall",
@@ -16,8 +16,7 @@ int main(int argc, char** argv)
          "-DBUILD_IMPLEMENTATION=1",
          NULL
       ),
-      .linker_flags = string_list_new(NULL),
-      .source_files = string_list_new_variable("build.h", NULL),
+      .source_files = string_list_new_varargs("build.h", NULL),
    };
 
    target_compile_object(&target, "build");
