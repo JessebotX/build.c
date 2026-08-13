@@ -145,6 +145,14 @@ extern "C" {
 #endif
 
 /**
+ * Create directory at PATH, including missing parent directories.
+ */
+BUILD_DEF int build_directory_new(const char* path);
+#if !defined(BUILD_UNSTRIP_PREFIX)
+   #define directory_new build_directory_new
+#endif
+
+/**
  * Create a new dynamically-sized null-terminated sequence of bytes
  * from an existing null-terminated string DATA. DATA can be null to
  * create an empty StringBuffer.
@@ -331,6 +339,7 @@ BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n);
 BUILD_INTERNAL_DEF int build__strlen(const char* s);
 
 #if BUILD_OS_WINDOWS
+BUILD_INTERNAL_DEF int build__windows_directory_new(const char* path);
 BUILD_INTERNAL_DEF void build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf);
 BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* cmd);
 #endif
@@ -342,6 +351,17 @@ BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* cmd);
 #endif /* BUILD_H */
 
 #ifdef BUILD_IMPLEMENTATION
+
+BUILD_DEF int build_directory_new(const char* path)
+{
+   int result = 0;
+#if BUILD_OS_WINDOWS
+   result = build__windows_directory_new(path);
+#else
+   result = 0;
+#endif
+   return result;
+}
 
 BUILD_DEF Build_StringBuffer build_string_buffer_new(const char* data)
 {
@@ -459,7 +479,7 @@ BUILD_DEF Build_StringList build_string_list_new_varargs(const char* item1, ...)
 {
    va_list args;
    const char* arg;
-   Build_StringList result = build_string_list_new(NULL); /* TODO: reduce allocations */
+   Build_StringList result = build_string_list_new(NULL);
 
    if (!item1) {
       return result;
@@ -668,17 +688,11 @@ BUILD_DEF int build_target_compile_object(const Build_CompileTarget* target, con
    BUILD_ASSERT(target);
    BUILD_ASSERT(obj_stem); /* TODO: default exe name (probably use parent dir?) */
 
-   command_args = build_string_list_new(NULL); /* TODO: preallocate memory? */
-   if (!command_args.data) {
-      goto ret;
-   }
+   command_args = build_string_list_new(NULL);
 
    /* TODO: check if compiler is MSVC (create a macro defining compiler command format) */
 
    obj_path = build_string_buffer_new_capacity(obj_stem, obj_stem_count, obj_stem_count + sizeof(".o"));
-   if (!obj_path.data) {
-      goto ret_cleanup_list;
-   }
    build_string_buffer_append(&obj_path, ".o");
 
    build_string_list_append_string(&command_args, target->compiler);
@@ -691,16 +705,13 @@ BUILD_DEF int build_target_compile_object(const Build_CompileTarget* target, con
    build_string_list_append_string_count(&command_args, obj_path.data, obj_path.count);
 
    if (!build_process_execute(&command_args)) {
-      goto ret_cleanup_list_and_buffer;
+      result = 0;
+   } else {
+      result = 1;
    }
 
-   result = 1;
-
-ret_cleanup_list_and_buffer:
    build_string_buffer_delete(&obj_path);
-ret_cleanup_list:
    build_string_list_delete_all(&command_args);
-ret:
    return result;
 }
 
@@ -714,15 +725,12 @@ BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target,
    BUILD_ASSERT(target);
    BUILD_ASSERT(exe_stem); /* TODO: default exe name (probably use parent dir?) */
 
-   command_args = build_string_list_new(NULL); /* TODO: preallocate memory? */
+   command_args = build_string_list_new(NULL);
 
    /* TODO: check if compiler is MSVC (create a macro defining compiler command format) */
 
    /* TODO: platform specific function to create exe_path */
    exe_path = build_string_buffer_new_capacity(exe_stem, exe_stem_count, exe_stem_count + sizeof(".exe"));
-   if (!exe_path.data) {
-      goto ret_cleanup_list;
-   }
    build_string_buffer_append(&exe_path, ".exe");
 
    build_string_list_append_string(&command_args, target->compiler);
@@ -735,14 +743,12 @@ BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target,
    build_string_list_append_string_count(&command_args, exe_path.data, exe_path.count);
 
    if (!build_process_execute(&command_args)) {
-      goto ret_cleanup_list_and_buffer;
+      result = 0;
+   } else {
+      result = 1;
    }
 
-   result = 1;
-
-ret_cleanup_list_and_buffer:
    build_string_buffer_delete(&exe_path);
-ret_cleanup_list:
    build_string_list_delete_all(&command_args);
    return result;
 }
@@ -790,6 +796,38 @@ BUILD_INTERNAL_DEF int build__strlen(const char* s)
 }
 
 #if BUILD_OS_WINDOWS
+BUILD_INTERNAL_DEF int build__windows_directory_new(const char* path)
+{
+   int result = 1;
+   int i = 0;
+   char* path_cstr = build__strdup(path);
+   int path_len = build__strlen(path);
+   char temp_char = '\0';
+
+   for (i = 0; i < path_len; i++) {
+      if (path_cstr[i] == '/' || path_cstr[i] == '\\') {
+         temp_char = path_cstr[i];
+         path_cstr[i] = '\0';
+         result = CreateDirectoryA(path_cstr, NULL);
+         path_cstr[i] = temp_char;
+      } else if (i == (path_len - 1)) {
+         result = CreateDirectoryA(path_cstr, NULL);
+      }
+
+      if (!result) {
+         if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            result = 0;
+            break;
+         } else {
+            result = 1;
+         }
+      }
+   }
+
+   BUILD_MEM_FREE(path_cstr, sizeof(*path_cstr) * (path_len + 1));
+   return result;
+}
+
 BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* args)
 {
    STARTUPINFO startup = BUILD__EMPTY_VALUE;
