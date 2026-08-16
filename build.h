@@ -252,6 +252,15 @@ BUILD_DEF Build_StrBuf build_strbuf_from_c_len(const char* s, int len);
 #endif
 
 /**
+ * Create a new dynamically-sized null-terminated string from a string
+ * literal.
+ */
+#define BUILD_STRBUF_FROM_LITERAL(l, arg) build_strbuf_from_c_len((l), (arg), sizeof((arg)) - 1)
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define STRBUF_FROM_LITERAL BUILD_STRBUF_FROM_LITERAL
+#endif
+
+/**
  * Create a new dynamically-sized null-terminated string from a
  * sequence of bytes S that is LEN bytes in length. Reserve CAP
  * amount of bytes for future modifications.
@@ -291,6 +300,14 @@ BUILD_DEF void build_strbuf_append_c(Build_StrBuf* s, const char* arg);
 BUILD_DEF void build_strbuf_append_c_len(Build_StrBuf* s, const char* arg, int len);
 #ifndef BUILD_DISABLE_SHORT_NAMES
    #define strbuf_append_c_len build_strbuf_append_c_len
+#endif
+
+/**
+ * Append string literal ARG to S.
+ */
+#define BUILD_STRBUF_APPEND_LITERAL(l, arg) build_strbuf_append_c_len((l), (arg), sizeof((arg)) - 1)
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define STRBUF_APPEND_LITERAL BUILD_STRBUF_APPEND_LITERAL
 #endif
 
 #ifndef BUILD_DISABLE_STDINC
@@ -359,11 +376,19 @@ BUILD_DEF void build_strlist_append_c(Build_StrList* l, const char* arg);
 #endif
 
 /**
- * Append string of byte length LEN to L.
+ * Append string ARG of byte length LEN to L.
  */
 BUILD_DEF void build_strlist_append_c_len(Build_StrList* l, const char* arg, int len);
 #ifndef BUILD_DISABLE_SHORT_NAMES
    #define strlist_append_c_len build_strlist_append_c_len
+#endif
+
+/**
+ * Append string literal ARG to L.
+ */
+#define BUILD_STRLIST_APPEND_LITERAL(l, arg) build_strlist_append_c_len((l), (arg), sizeof((arg)) - 1)
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define STRLIST_APPEND_LITERAL BUILD_STRLIST_APPEND_LITERAL
 #endif
 
 #ifndef BUILD_DISABLE_STDINC
@@ -424,11 +449,11 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
       int output_index;
 
       /* ... -c #in -o #out */
-      build_strlist_append_c_len(&command_args, "-c", sizeof("-c") - 1);
-      build_strlist_append_c_len(&command_args, "placeholder", sizeof("placeholder") - 1); /* placeholder index for source file */
+      BUILD_STRLIST_APPEND_LITERAL(&command_args, "-c");
+      BUILD_STRLIST_APPEND_LITERAL(&command_args, "placeholder"); /* placeholder index for source file */
       source_index = command_args.len - 1;
-      build_strlist_append_c_len(&command_args, "-o", sizeof("-o") - 1);
-      build_strlist_append_c_len(&command_args, "placeholder", sizeof("placeholder") - 1); /* placeholder index for output file */
+      BUILD_STRLIST_APPEND_LITERAL(&command_args, "-o");
+      BUILD_STRLIST_APPEND_LITERAL(&command_args, "placeholder"); /* placeholder index for output file */
       output_index = command_args.len - 1;
 
       for (i = 0; i < artifact->source_files.len; i++) {
@@ -440,7 +465,7 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
          build_strbuf_clear(&output_path);
          BUILD_MEM_FREE(command_args.bytes[output_index], (build__strlen(command_args.bytes[output_index]) + 1) * sizeof(*command_args.bytes));
          build_strbuf_append_c(&output_path, artifact->source_files.bytes[i]);
-         build_strbuf_append_c_len(&output_path, ".o", sizeof(".o") - 1);
+         BUILD_STRBUF_APPEND_LITERAL(&output_path, ".o");
          command_args.bytes[output_index] = build__strndup(output_path.bytes, output_path.len);
 
          /* run command */
@@ -457,14 +482,17 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
 
    build_strbuf_append_c(&output_path, exe_name);
 #ifdef BUILD_OS_WINDOWS
-   build_strbuf_append_c_len(&output_path, ".exe", sizeof(".exe") - 1);
+   BUILD_STRBUF_APPEND_LITERAL(&output_path, ".exe");
 #endif
 
+   if (!artifact->linker) {
+      artifact->linker = artifact->compiler;
+   }
 
    build_strlist_append_c(&command_args, artifact->linker);
    build_strlist_append_l(&command_args, &artifact->link_options);
    build_strlist_append_l(&command_args, &objects);
-   build_strlist_append_c_len(&command_args, "-o", sizeof("-o") - 1);
+   BUILD_STRLIST_APPEND_LITERAL(&command_args, "-o");
    build_strlist_append_c(&command_args, output_path.bytes);
 
    result = build_process_execute(&command_args);
