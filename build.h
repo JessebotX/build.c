@@ -106,18 +106,35 @@ License
    #endif
 
    #if !defined(BUILD_MEM_ALLOC) || !defined(BUILD_MEM_REALLOC) || !defined(BUILD_MEM_FREE)
-      #include <stdlib.h>
+      #ifdef BUILD_OS_WINDOWS
+         #ifndef BUILD_MEM_ALLOC
+            #define BUILD_MEM_ALLOC(n) \
+               HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (n))
+         #endif
 
-      #ifndef BUILD_MEM_ALLOC
-         #define BUILD_MEM_ALLOC(n) malloc((n))
-      #endif
+         #ifndef BUILD_MEM_REALLOC
+            #define BUILD_MEM_REALLOC(ptr, n, n_old) \
+               HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (ptr), (n))
+         #endif
 
-      #ifndef BUILD_MEM_REALLOC
-         #define BUILD_MEM_REALLOC(ptr, n, n_old) realloc((ptr), (n))
-      #endif
+         #ifndef BUILD_MEM_FREE
+            #define BUILD_MEM_FREE(ptr, n) \
+               HeapFree(GetProcessHeap(), 0, (void*)(ptr))
+         #endif
+      #else
+         #include <stdlib.h>
 
-      #ifndef BUILD_MEM_FREE
-         #define BUILD_MEM_FREE(ptr, n) free((void *)(ptr))
+         #ifndef BUILD_MEM_ALLOC
+            #define BUILD_MEM_ALLOC(n) malloc((n))
+         #endif
+
+         #ifndef BUILD_MEM_REALLOC
+            #define BUILD_MEM_REALLOC(ptr, n, n_old) realloc((ptr), (n))
+         #endif
+
+         #ifndef BUILD_MEM_FREE
+            #define BUILD_MEM_FREE(ptr, n) free((void*)(ptr))
+         #endif
       #endif
    #endif
 #endif
@@ -206,11 +223,48 @@ BUILD_DEF int build_process_execute(const Build_StrList* args);
 
 /**
  * Execute an external process on its own separate thread. Returns a
+ * non-zero value on success, 0 on failure. Use existing COMMAND_BUF
+ * to construct command as string if necessary.
+ */
+BUILD_DEF int build_process_execute_b(const Build_StrList* args, Build_StrBuf* command_buf);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define process_execute_b build_process_execute_b
+#endif
+
+/**
+ * Execute an external process on its own separate thread. Returns a
  * non-zero value on success, 0 on failure.
  */
 BUILD_DEF int build_process_execute_c(const char* args[]);
 #ifndef BUILD_DISABLE_SHORT_NAMES
    #define process_execute_c build_process_execute_c
+#endif
+
+/**
+ * Execute an external process on its own separate thread. Returns a
+ * non-zero value on success, 0 on failure. Use existing COMMAND_BUF
+ * to construct command as string if necessary.
+ */
+BUILD_DEF int build_process_execute_c_b(const char* args[], Build_StrBuf* command_buf);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define process_execute_c_b build_process_execute_c_b
+#endif
+
+/**
+ * Read entire file at PATH.
+ */
+BUILD_DEF Build_StrBuf build_file_read_all(const char* path);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define file_read_all build_file_read_all
+#endif
+
+/**
+ * Read entire file at PATH into BUF. Returns the number of bytes read
+ * into BUF, and returns a number < 0 on error.
+ */
+BUILD_DEF int build_file_read_all_b(const char* path, Build_StrBuf* buf);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define file_read_all_b build_file_read_all_b
 #endif
 
 /**
@@ -221,6 +275,14 @@ BUILD_DEF int build_process_execute_c(const char* args[]);
 BUILD_DEF int build_directory_new(const char* path);
 #ifndef BUILD_DISABLE_SHORT_NAMES
    #define directory_new build_directory_new
+#endif
+
+/**
+ * Set current directory to PATH.
+ */
+BUILD_DEF int build_directory_set(const char* path);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define directory_set build_directory_set
 #endif
 
 /**
@@ -271,6 +333,14 @@ BUILD_DEF Build_StrBuf build_strbuf_from_c_reserve(const char* s, int len, int c
 #endif
 
 /**
+ * Resize capacity of S to NEW_CAP. NEW_CAP must be greater than the len of S.
+ */
+BUILD_DEF void build_strbuf_resize(Build_StrBuf* s, int new_cap);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_from_c_reserve build_strbuf_from_c_reserve
+#endif
+
+/**
  * Clear contents of S.
  */
 BUILD_DEF void build_strbuf_clear(Build_StrBuf* s);
@@ -281,9 +351,9 @@ BUILD_DEF void build_strbuf_clear(Build_StrBuf* s);
 /**
  * Delete contents and deallocate all memory of S.
  */
-BUILD_DEF void build_strbuf_delete(Build_StrBuf* s);
+BUILD_DEF void build_strbuf_free(Build_StrBuf* s);
 #ifndef BUILD_DISABLE_SHORT_NAMES
-   #define strbuf_delete build_strbuf_delete
+   #define strbuf_free build_strbuf_free
 #endif
 
 /**
@@ -362,9 +432,9 @@ BUILD_DEF void build_strlist_clear(Build_StrList* l);
 /**
  * Delete and deallocate the buffer and all the items within it in L.
  */
-BUILD_DEF void build_strlist_delete(Build_StrList* l);
+BUILD_DEF void build_strlist_free(Build_StrList* l);
 #ifndef BUILD_DISABLE_SHORT_NAMES
-   #define strlist_delete build_strlist_delete
+   #define strlist_free build_strlist_free
 #endif
 
 /**
@@ -411,8 +481,10 @@ BUILD_DEF void build_strlist_append_l(Build_StrList* l, const Build_StrList* arg
 #endif
 
 #ifdef BUILD_OS_WINDOWS
-BUILD_INTERNAL int build__process_execute_windows(const char* args[]);
+BUILD_INTERNAL int build__directory_set_windows(const char* path);
+BUILD_INTERNAL int build__process_execute_windows(const char* args[], Build_StrBuf* buf);
 BUILD_INTERNAL int build__directory_new_windows(const char* path);
+BUILD_INTERNAL Build_StrBuf build__file_read_all_windows(const char* path);
 #endif
 
 BUILD_INTERNAL void* build__memcpy(void* destination, const void* source, int n);
@@ -430,11 +502,12 @@ BUILD_INTERNAL char* build__strndup(const char* s, int n);
 
 BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char* exe_name)
 {
+   int result = 0;
    int i;
    Build_StrList command_args = BUILD__EMPTY_VALUE;
    Build_StrList objects = BUILD__EMPTY_VALUE;
    Build_StrBuf output_path = BUILD__EMPTY_VALUE;
-   int result = 0;
+   Build_StrBuf command_buf = BUILD__EMPTY_VALUE;
    BUILD_ASSERT(artifact && "missing artifact");
    BUILD_ASSERT(exe_name && "missing exe name"); /* TODO: default to root dir name */
 
@@ -469,8 +542,8 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
          command_args.bytes[output_index] = build__strndup(output_path.bytes, output_path.len);
 
          /* run command */
-         result = build_process_execute(&command_args);
-         BUILD_ASSERT(result);
+         result = build_process_execute_b(&command_args, &command_buf);
+         BUILD_ASSERT(result && "running process failed");
 
          /* add to object list for linking */
          build_strlist_append_c_len(&objects, output_path.bytes, output_path.len);
@@ -495,24 +568,51 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
    BUILD_STRLIST_APPEND_LITERAL(&command_args, "-o");
    build_strlist_append_c(&command_args, output_path.bytes);
 
-   result = build_process_execute(&command_args);
+   result = build_process_execute_b(&command_args, &command_buf);
+
+   build_strbuf_free(&command_buf);
+   build_strbuf_free(&output_path);
+   build_strlist_free(&objects);
+   build_strlist_free(&command_args);
 
    return result;
 }
 
 BUILD_DEF int build_process_execute(const Build_StrList* args)
 {
+   Build_StrBuf command_buf = BUILD__EMPTY_VALUE;
+   return build_process_execute_c_b(args->bytes, &command_buf);
+}
+
+BUILD_DEF int build_process_execute_b(const Build_StrList* args, Build_StrBuf* command_buf)
+{
+   BUILD_ASSERT(command_buf && "missing strbuf");
    if (!args) {
       return 0;
    }
-   return build_process_execute_c(args->bytes);
+   build_strbuf_clear(command_buf);
+   return build_process_execute_c_b(args->bytes, command_buf);
 }
 
 BUILD_DEF int build_process_execute_c(const char* args[])
 {
    int result = 0;
+   Build_StrBuf command_buf = BUILD__EMPTY_VALUE;
+
+   result = build_process_execute_c_b(args, &command_buf);
+   return result;
+}
+
+BUILD_DEF int build_process_execute_c_b(const char* args[], Build_StrBuf* command_buf)
+{
+   int result = 0;
+   BUILD_ASSERT(command_buf && "missing strbuf");
+
+   build_strbuf_clear(command_buf);
 #ifdef BUILD_OS_WINDOWS
-   result = build__process_execute_windows(args);
+   {
+      result = build__process_execute_windows(args, command_buf);
+   }
 #else
    result = 0;
 #endif
@@ -525,8 +625,49 @@ BUILD_DEF int build_process_execute_c_len(const char* args[], int len)
    Build_StrList l = build_strlist_from_c_len(args, len);
 
    result = build_process_execute_c(l.bytes);
-   build_strlist_delete(&l);
+   build_strlist_free(&l);
    return result;
+}
+
+BUILD_DEF Build_StrBuf build_file_read_all(const char* path)
+{
+   Build_StrBuf result = BUILD__EMPTY_VALUE;
+
+   if (build_file_read_all_b(path, &result) < 0) {
+      build_strbuf_free(&result);
+   }
+   return result;
+}
+
+BUILD_DEF int build_file_read_all_b(const char* path, Build_StrBuf* buf)
+{
+   int result = -1;
+   HANDLE file;
+   LARGE_INTEGER file_size;
+   DWORD bytes_read = 0;
+   BUILD_ASSERT(buf && "missing strbuf");
+
+   file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+   if (file == INVALID_HANDLE_VALUE) {
+      goto ret;
+   }
+
+   if (!GetFileSizeEx(file, &file_size)) {
+      goto ret_cleanup;
+   }
+
+   build_strbuf_resize(buf, file_size.QuadPart + 1);
+   if (!ReadFile(file, buf->bytes, (DWORD)file_size.QuadPart, &bytes_read, NULL)) {
+      buf->len = bytes_read;
+      goto ret_cleanup;
+   }
+   buf->len = bytes_read;
+
+   result = bytes_read;
+ret_cleanup:
+   CloseHandle(file);
+ret:
+   return bytes_read;
 }
 
 BUILD_DEF int build_directory_new(const char* path)
@@ -534,6 +675,17 @@ BUILD_DEF int build_directory_new(const char* path)
    int result = 0;
 #ifdef BUILD_OS_WINDOWS
    result = build__directory_new_windows(path);
+#else
+   result = 0;
+#endif
+   return result;
+}
+
+BUILD_DEF int build_directory_set(const char* path)
+{
+   int result = 0;
+#ifdef BUILD_OS_WINDOWS
+   result = build__directory_set_windows(path);
 #else
    result = 0;
 #endif
@@ -564,6 +716,22 @@ BUILD_DEF Build_StrBuf build_strbuf_from_c_reserve(const char* s, int len, int c
    return result;
 }
 
+BUILD_DEF void build_strbuf_resize(Build_StrBuf* s, int new_cap)
+{
+   BUILD_ASSERT(s && "missing strbuf");
+   BUILD_ASSERT(new_cap > 0 && new_cap > s->len);
+
+   if (s->cap == 0) {
+      s->bytes = (char*)BUILD_MEM_ALLOC(new_cap * sizeof(*s->bytes));
+      BUILD_ASSERT(s->bytes && "failed to allocate memory");
+   } else {
+      s->bytes = (char*)BUILD_MEM_REALLOC(s->bytes, new_cap * sizeof(*s->bytes), s->cap * sizeof(*s->bytes));
+      BUILD_ASSERT(s->bytes && "failed to reallocate memory");
+   }
+
+   s->cap = new_cap;
+}
+
 BUILD_DEF void build_strbuf_clear(Build_StrBuf* s)
 {
    BUILD_ASSERT(s && "missing strbuf");
@@ -574,7 +742,7 @@ BUILD_DEF void build_strbuf_clear(Build_StrBuf* s)
    s->len = 0;
 }
 
-BUILD_DEF void build_strbuf_delete(Build_StrBuf* s)
+BUILD_DEF void build_strbuf_free(Build_StrBuf* s)
 {
    BUILD_ASSERT(s && "missing strbuf");
 
@@ -684,7 +852,7 @@ BUILD_DEF void build_strlist_clear(Build_StrList* l)
    l->len = 0;
 }
 
-BUILD_DEF void build_strlist_delete(Build_StrList* l)
+BUILD_DEF void build_strlist_free(Build_StrList* l)
 {
    int i;
    BUILD_ASSERT(l && "missing strlist");
@@ -788,13 +956,18 @@ BUILD_DEF void build_strlist_append_l(Build_StrList* l, const Build_StrList* arg
 }
 
 #ifdef BUILD_OS_WINDOWS
-BUILD_INTERNAL int build__process_execute_windows(const char* args[])
+BUILD_INTERNAL int build__directory_set_windows(const char* path)
+{
+   return SetCurrentDirectory(path);
+}
+
+BUILD_INTERNAL int build__process_execute_windows(const char* args[], Build_StrBuf* buf)
 {
    int result = 0;
    int i;
-   Build_StrBuf command = BUILD__EMPTY_VALUE;
    STARTUPINFO startup = BUILD__EMPTY_VALUE;
    PROCESS_INFORMATION process = BUILD__EMPTY_VALUE;
+   BUILD_ASSERT(buf && "missing strbuf");
 
    if (!args) {
       goto ret;
@@ -802,6 +975,7 @@ BUILD_INTERNAL int build__process_execute_windows(const char* args[])
 
    ZeroMemory(&startup, sizeof(startup));
    ZeroMemory(&process, sizeof(process));
+   build_strbuf_clear(buf);
 
    for (i = 0; args[i]; i++) { /* join and escape args */
       int len = build__strlen(args[i]);
@@ -809,7 +983,7 @@ BUILD_INTERNAL int build__process_execute_windows(const char* args[])
       int j = 0;
 
       if (i > 0) {
-         build_strbuf_append_c(&command, " ");
+         build_strbuf_append_c(buf, " ");
       }
 
       if (len != 0) {
@@ -821,12 +995,12 @@ BUILD_INTERNAL int build__process_execute_windows(const char* args[])
          }
 
          if (j >= len) {
-            build_strbuf_append_c_len(&command, args[i], len);
+            build_strbuf_append_c_len(buf, args[i], len);
             continue;
          }
       }
 
-      build_strbuf_append_c(&command, "\"");
+      build_strbuf_append_c(buf, "\"");
 
       for (j = 0; j < len; j++) {
          char c = args[i][j];
@@ -836,18 +1010,18 @@ BUILD_INTERNAL int build__process_execute_windows(const char* args[])
             if (c == '\"') {
                int k;
                for (k = 0; k < backslashes + 1; k++) {
-                  build_strbuf_append_c(&command, "\\");
+                  build_strbuf_append_c(buf, "\\");
                }
             }
             backslashes = 0;
          }
-         build_strbuf_append_c_len(&command, &c, 1);
+         build_strbuf_append_c_len(buf, &c, 1);
       }
 
       for (j = 0; j < backslashes; j++) {
-         build_strbuf_append_c(&command, "\\");
+         build_strbuf_append_c(buf, "\\");
       }
-      build_strbuf_append_c(&command, "\"");
+      build_strbuf_append_c(buf, "\"");
    }
 
    startup.cb = sizeof(STARTUPINFO);
@@ -868,7 +1042,7 @@ BUILD_INTERNAL int build__process_execute_windows(const char* args[])
    }
    startup.dwFlags |= STARTF_USESTDHANDLES;
 
-   if (!CreateProcessA(NULL, command.bytes, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process)) {
+   if (!CreateProcessA(NULL, buf->bytes, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process)) {
       /* TODO: logging */
       goto ret;
    }
@@ -878,7 +1052,6 @@ BUILD_INTERNAL int build__process_execute_windows(const char* args[])
    CloseHandle(process.hThread);
    result = 1;
 ret:
-   build_strbuf_delete(&command);
    return result;
 }
 

@@ -1,3 +1,4 @@
+#define BUILD_DISABLE_SHORT_NAMES
 #define BUILD_IMPLEMENTATION
 #include "build.h"
 
@@ -27,7 +28,7 @@ int main(int argc, char** argv)
       for (int i = 0; i < l.len; i++) {
          printf("%s\n", l.bytes[i]);
       }
-      strlist_delete(&l);
+      strlist_free(&l);
 
       printf("=== END Test 2 ===\n\n");
    }
@@ -39,7 +40,7 @@ int main(int argc, char** argv)
       for (int i = 0; i < l.len; i++) {
          printf("%s\n", l.bytes[i]);
       }
-      strlist_delete(&l);
+      strlist_free(&l);
 
       printf("=== END Test 3 ===\n\n");
    }
@@ -53,7 +54,7 @@ int main(int argc, char** argv)
       for (int i = 0; i < l.len; i++) {
          printf("%s\n", l.bytes[i]);
       }
-      strlist_delete(&l);
+      strlist_free(&l);
 
       printf("=== END Test 3 ===\n\n");
    }
@@ -82,12 +83,12 @@ int main(int argc, char** argv)
       printf("=== END Test 4 ===\n\n");
    }
 #endif
-   Artifact artifact = (Artifact){
+   Build_Artifact artifact = (Build_Artifact){
       .compiler = "clang",
-      .compile_options = strlist_from_args("-O0", "-g3", NULL),
-      .source_files = strlist_from_args("build.c", NULL),
+      .compile_options = build_strlist_from_args("-O0", "-g3", NULL),
+      .source_files = build_strlist_from_args("build.c", NULL),
    };
-   artifact_new_executable(&artifact, "my_program");
+   build_artifact_new_executable(&artifact, "my_program");
 
    return 0;
 }
