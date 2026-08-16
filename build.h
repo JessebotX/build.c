@@ -1,17 +1,58 @@
-/* build.h -*- mode: c -*- https://github.com/JessebotX/build.c
+/* build.h
 
-  Single header-only C89+ library for writing build recipes.
+  * URL: <https://github.com/JessebotX/build.h>
 
-# License
+  Portable single-file C89+/C++ library for writing project build
+  recipes.
 
-  SPDX-License-Identifier: 0BSD
+Quickstart
+----------
 
-  Copyright (C) 2026 by Jesse <jessebot.git@gmail.com>
+  my_program.c:
+
+      #include <stdio.h>
+      #define Hello_world puts
+
+      int main(void) {
+         Hello_world("printf");
+         return 0;
+      }
+
+
+  build.c (written in C99+, but build.h supports C89)
+
+      #define BUILD_IMPLEMENTATION
+      #include "build.h"
+
+      int main(int argc, char** argv) {
+         Artifact artifact = (Artifact){
+            .compiler = "clang",
+            .compile_options = strlist_from_args("-O0", "-g3", NULL),
+            .link_options = strlist_from_args("-lm", NULL),
+            .source_files = strlist_from_args("my_program1.c", "my_program2.c", NULL),
+         };
+         artifact_new_executable(&artifact, "my_program");
+
+         return 0;
+      }
+
+  (Windows) Run the following commands to build and execute my_program:
+
+      clang build.c -o build.exe
+      build.exe
+      my_program.exe
+
+License
+-------
+
+  * SPDX-License-Identifier: 0BSD
+
+  Copyright (c) 2026 Jesse <jessebot.git@gmail.com>
 
   Permission to use, copy, modify, and/or distribute this software for
   any purpose with or without fee is hereby granted.
 
-  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+  THE SOFTWARE IS PROVIDED “AS IS” AND THE AUTHOR DISCLAIMS ALL
   WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
   AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
@@ -25,44 +66,38 @@
 #define BUILD_H
 
 #define BUILD_VERSION_MAJOR 0
-#define BUILD_VERSION_MINOR 1
-#define BUILD_VERSION_PATCH 1
-
-#if !BUILD_OS_OTHER
-   #if defined(_WIN32) || defined(_WIN64)
-      #ifndef BUILD_OS_WINDOWS
-         #define BUILD_OS_WINDOWS 1
-      #endif
-   #else
-      #error OS unsupported by default (disable error by setting BUILD_OS_OTHER=1)
-   #endif
-#else
-   #define BUILD_OS_OTHER 1
-#endif
-
-#if __cplusplus
-   #define BUILD_CPP_VERSION __cplusplus
-#else
-   #ifdef __STDC_VERSION__
-      #define BUILD_C_VERSION __STDC_VERSION__
-   #else
-      #define BUILD_C_VERSION 1
-   #endif
-#endif
-
-#ifndef NULL
-   #define NULL ((void*)0)
-#endif
+#define BUILD_VERSION_MINOR 2
+#define BUILD_VERSION_PATCH 0
 
 #ifndef BUILD_DEF
    #define BUILD_DEF
 #endif
 
-#ifndef BUILD_INTERNAL_DEF
-   #define BUILD_INTERNAL_DEF static
+#ifndef BUILD_INTERNAL
+   #define BUILD_INTERNAL static
 #endif
 
-#ifndef BUILD_NO_STDINC
+#ifndef BUILD_OS_OTHER
+   #if defined(_WIN32) || defined(_WIN64)
+      #define BUILD_OS_WINDOWS 1
+   #elif defined(__linux__)
+      #define BUILD_OS_LINUX 1
+      #error TODO: Linux support is currently WIP
+   #else
+      #error OS not supported (disable error by defining BUILD_OS_OTHER)
+   #endif
+#endif
+
+#if defined(BUILD_OS_WINDOWS)
+   #define WIN32_LEAN_AND_MEAN
+   #include <Windows.h>
+#elif defined(BUILD_OS_LINUX)
+   #include <sys/stat.h>
+   #include <sys/types.h>
+   #include <unistd.h>r
+#endif
+
+#ifndef BUILD_DISABLE_STDINC
    #include <stdarg.h>
 
    #ifndef BUILD_ASSERT
@@ -72,279 +107,295 @@
 
    #if !defined(BUILD_MEM_ALLOC) || !defined(BUILD_MEM_REALLOC) || !defined(BUILD_MEM_FREE)
       #include <stdlib.h>
-   #endif
 
-   #ifndef BUILD_MEM_ALLOC
-      #define BUILD_MEM_ALLOC(n) malloc(n)
-   #endif
+      #ifndef BUILD_MEM_ALLOC
+         #define BUILD_MEM_ALLOC(n) malloc((n))
+      #endif
 
-   #ifndef BUILD_MEM_REALLOC
-      #define BUILD_MEM_REALLOC(ptr, n, n_old) realloc(ptr, n)
-   #endif
+      #ifndef BUILD_MEM_REALLOC
+         #define BUILD_MEM_REALLOC(ptr, n, n_old) realloc((ptr), (n))
+      #endif
 
-   #ifndef BUILD_MEM_FREE
-      #define BUILD_MEM_FREE(ptr, n) free
+      #ifndef BUILD_MEM_FREE
+         #define BUILD_MEM_FREE(ptr, n) free((void *)(ptr))
+      #endif
    #endif
 #endif
 
-#if BUILD_C_VERSION >= 202311L || BUILD_CPP_VERSION >= 201103L
+#if __STDC_VERSION__ >= 202311L
    #define BUILD__EMPTY_VALUE {}
 #else
    #define BUILD__EMPTY_VALUE {0}
 #endif
 
-#define BUILD__MAYBE_UNUSED(name) ((void)(name))
-
-#if BUILD_OS_WINDOWS
-   #define WIN32_LEAN_AND_MEAN
-   #include <Windows.h>
+#ifndef NULL
+   #if __STDC_VERSION__ >= 202311L
+      #define NULL nullptr
+   #else
+      #define NULL ((void*)0)
+   #endif
 #endif
 
 /**
- * Dynamically-sized null-terminated sequence of bytes (char[]).
+ * A dynamically-sized null-terminated string (array of bytes).
  */
-typedef struct Build_StringBuffer Build_StringBuffer;
-struct Build_StringBuffer {
-   char* data;
-   int count;
-   int capacity;
+typedef struct Build_StrBuf Build_StrBuf;
+struct Build_StrBuf {
+   char* bytes;
+   int len;
+   int cap;
 };
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define StringBuffer Build_StringBuffer
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define StrBuf Build_StrBuf
 #endif
 
 /**
- * Dynamically-sized null-terminated array containing null-terminated sequences of bytes (char[][]).
+ * A dynamically-sized null-terminated array of null-terminated strings
+ * (i.e. char[][]).
  */
-typedef struct Build_StringList Build_StringList;
-struct Build_StringList {
-   char** data;
-   int count;
-   int capacity;
+typedef struct Build_StrList Build_StrList;
+struct Build_StrList {
+   const char** bytes;
+   int len;
+   int cap;
 };
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define StringList Build_StringList
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define StrList Build_StrList
 #endif
 
 /**
- * Collection of source files and compiler settings.
+ * Options and source files to make a build artifact.
  */
-typedef struct Build_CompileTarget Build_CompileTarget;
-struct Build_CompileTarget {
-   char* compiler;
-   Build_StringList compile_flags;
-   Build_StringList linker_flags;
-   Build_StringList source_files;
+typedef struct Build_Artifact Build_Artifact;
+struct Build_Artifact {
+   const char* compiler;
+   const char* linker;
+   const char** compile_command_format; /* default: "#cc", "#cflags", "-c", "#in", "-o", "#out", NULL */
+   const char** link_command_format; /* default: "#cc", "#ldflags", "#in", "-o", "#out", NULL */
+   Build_StrList compile_options;
+   Build_StrList link_options;
+   Build_StrList source_files;
 };
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define CompileTarget Build_CompileTarget
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define Artifact Build_Artifact
 #endif
 
-#if BUILD_CPP_VERSION
+#ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * Create directory at PATH, including missing parent directories.
+ * Create a new executable from ARTIFACT with the name of EXE_NAME.
+ *
+ * NOTE: On Windows, the .exe file extension will automatically be
+ * appended onto the name.
  */
-BUILD_DEF int build_directory_new(const char* path);
-#if !defined(BUILD_UNSTRIP_PREFIX)
-   #define directory_new build_directory_new
+BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char* exe_name);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define artifact_new_executable build_artifact_new_executable
 #endif
 
 /**
- * Create a new dynamically-sized null-terminated sequence of bytes
- * from an existing null-terminated string DATA. DATA can be null to
- * create an empty StringBuffer.
+ * Execute an external process on its own separate thread. Returns a
+ * non-zero value on success, 0 on failure.
  */
-BUILD_DEF Build_StringBuffer build_string_buffer_new(const char* data);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_new build_string_buffer_new
-#endif
-
-/**
- * Create a new dynamically-sized null-terminated sequence of bytes
- * from an existing string DATA with a byte length of COUNT.
- */
-BUILD_DEF Build_StringBuffer build_string_buffer_new_count(const char* data, int count);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_new_count build_string_buffer_new_count
-#endif
-
-/**
- * Create a new dynamically-sized null-terminated sequence of bytes
- * from an existing string DATA with a byte length of COUNT. Reserve
- * CAPACITY bytes for future appends.
- */
-BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, int count, int capacity);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_new_capacity build_string_buffer_new_capacity
-#endif
-
-/**
- * Release all memory of S.
- */
-BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_delete build_string_buffer_delete
-#endif
-
-/**
- * Clear contents in S.
- */
-BUILD_DEF void build_string_buffer_clear(Build_StringBuffer* s);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_clear build_string_buffer_clear
-#endif
-
-/**
- * Append a null-terminated string ARG to a dynamically-sized
- * null-terminated string S.
- */
-BUILD_DEF Build_StringBuffer build_string_buffer_append(Build_StringBuffer* s, const char* arg);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_append build_string_buffer_append
-#endif
-
-/**
- * Append string ARG of byte length ARG_COUNT to a dynamically-sized
- * null-terminated string S.
- */
-BUILD_DEF Build_StringBuffer build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_buffer_append_count build_string_buffer_append_count
-#endif
-
-/**
- * Create a null-terminated array of a null-terminated sequence of
- * bytes (char[][]) from an existing null-terminated array of
- * null-terminated strings. DATA can be null to create an empty
- * StringList.
- */
-BUILD_DEF Build_StringList build_string_list_new(const char* const* data);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_new build_string_list_new
-#endif
-
-#ifndef BUILD_NO_STDINC
-/**
- * Create a null-terminated array of null-terminated sequence of bytes
- * (char[][]) from variable number of arguments. The last argument
- * must be NULL.
- */
-BUILD_DEF Build_StringList build_string_list_new_varargs(const char* item1, ...);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_new_varargs build_string_list_new_varargs
-#endif
-#endif
-
-/**
- * Create a null-terminated array of a null-terminated sequence of
- * bytes (char[][]) from an existing array of null-terminated strings,
- * where DATA is of size COUNT.
- */
-BUILD_DEF Build_StringList build_string_list_new_count(const char* const* data, int count);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_new_count build_string_list_new_count
-#endif
-
-/**
- * Create a null-terminated array of a null-terminated sequence of
- * bytes (char[][]) from an existing array of null-terminated strings,
- * where DATA is of size COUNT. Reserve CAPACITY for future appends.
- */
-BUILD_DEF Build_StringList build_string_list_new_capacity(const char* const* data, int count, int capacity);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_new_capacity build_string_list_new_capacity
-#endif
-
-/**
- * Release all memory in L, including its individual items.
- */
-BUILD_DEF void build_string_list_delete_all(Build_StringList* l);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_delete_all build_string_list_delete_all
-#endif
-
-/**
- * Release memory of all individual items in L, but keep L's own memory.
- */
-BUILD_DEF void build_string_list_delete_items(Build_StringList* l);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_delete_items build_string_list_delete_items
-#endif
-
-/**
- * Append a null-terminated string ARG to L.
- */
-BUILD_DEF Build_StringList build_string_list_append_string(Build_StringList* l, const char* arg);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_append_string build_string_list_append_string
-#endif
-
-#ifndef BUILD_NO_STDINC
-/**
- * Append a variable number of null-terminated string arguments to L.
- * The last argument must be NULL.
- */
-BUILD_DEF Build_StringList build_string_list_append_string_varargs(Build_StringList* l, ...);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_append_string_varargs build_string_list_append_string_varargs
-#endif
-#endif
-
-/**
- * Append string ARG of byte length ARG_COUNT to L.
- */
-BUILD_DEF Build_StringList build_string_list_append_string_count(Build_StringList* l, const char* arg, int arg_count);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_append_string_count build_string_list_append_string_count
-#endif
-
-/**
- * Append ARG to L.
- */
-BUILD_DEF Build_StringList build_string_list_append_list(Build_StringList* l, const Build_StringList* arg);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define string_list_append_list build_string_list_append_list
-#endif
-
-/**
- * Execute a process from a list of arguments CMD.
- */
-BUILD_DEF int build_process_execute(Build_StringList* cmd);
-#ifndef BUILD_UNSTRIP_PREFIX
+BUILD_DEF int build_process_execute(const Build_StrList* args);
+#ifndef BUILD_DISABLE_SHORT_NAMES
    #define process_execute build_process_execute
 #endif
 
 /**
- * Create object file from TARGET.
+ * Execute an external process on its own separate thread. Returns a
+ * non-zero value on success, 0 on failure.
  */
-BUILD_DEF int build_target_compile_object(const Build_CompileTarget* target, const char* obj_stem);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define target_compile_object build_target_compile_object
+BUILD_DEF int build_process_execute_c(const char* args[]);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define process_execute_c build_process_execute_c
 #endif
 
 /**
- * Create executable from TARGET.
+ * Create a new directory at PATH, and creates parent path elements if
+ * necessary. If PATH is not absolute, it will be relative to the
+ * current directory.
  */
-BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target, const char* exe_stem);
-#ifndef BUILD_UNSTRIP_PREFIX
-   #define target_compile_executable build_target_compile_executable
+BUILD_DEF int build_directory_new(const char* path);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define directory_new build_directory_new
 #endif
 
-BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n);
-BUILD_INTERNAL_DEF char* build__strdup(const char* s);
-BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n);
-BUILD_INTERNAL_DEF int build__strlen(const char* s);
-
-#if BUILD_OS_WINDOWS
-BUILD_INTERNAL_DEF int build__windows_directory_new(const char* path);
-BUILD_INTERNAL_DEF void build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf);
-BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* cmd);
+/**
+ * Execute an external process on its own separate thread. LEN is the
+ * number of arguments provided (excluding the null terminator).
+ * Returns a non-zero value on success, 0 on failure.
+ */
+BUILD_DEF int build_process_execute_c_len(const char* args[], int len);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define process_execute_c_len build_process_execute_c_len
 #endif
 
-#if BUILD_CPP_VERSION
+/**
+ * Create a new dynamically-sized null-terminated string from a
+ * null-terminated sequence of bytes S.
+ */
+BUILD_DEF Build_StrBuf build_strbuf_from_c(const char* s);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_from_c build_strbuf_from_c
+#endif
+
+/**
+ * Create a new dynamically-sized null-terminated string from a
+ * sequence of bytes S that is LEN bytes in length.
+ */
+BUILD_DEF Build_StrBuf build_strbuf_from_c_len(const char* s, int len);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_from_c_len build_strbuf_from_c_len
+#endif
+
+/**
+ * Create a new dynamically-sized null-terminated string from a
+ * sequence of bytes S that is LEN bytes in length. Reserve CAP
+ * amount of bytes for future modifications.
+ */
+BUILD_DEF Build_StrBuf build_strbuf_from_c_reserve(const char* s, int len, int cap);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_from_c_reserve build_strbuf_from_c_reserve
+#endif
+
+/**
+ * Clear contents of S.
+ */
+BUILD_DEF void build_strbuf_clear(Build_StrBuf* s);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_clear build_strbuf_clear
+#endif
+
+/**
+ * Delete contents and deallocate all memory of S.
+ */
+BUILD_DEF void build_strbuf_delete(Build_StrBuf* s);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_delete build_strbuf_delete
+#endif
+
+/**
+ * Append null-terminated string ARG to S
+ */
+BUILD_DEF void build_strbuf_append_c(Build_StrBuf* s, const char* arg);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_append_c build_strbuf_append_c
+#endif
+
+/**
+ * Append string ARG of byte length LEN to S
+ */
+BUILD_DEF void build_strbuf_append_c_len(Build_StrBuf* s, const char* arg, int len);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strbuf_append_c_len build_strbuf_append_c_len
+#endif
+
+#ifndef BUILD_DISABLE_STDINC
+/**
+ * Create a null-terminated array of null-terminated strings from
+ * multiple null-terminated string arguments. The last argument must be
+ * null.
+ */
+BUILD_DEF Build_StrList build_strlist_from_args(const char* arg_0, ...);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_from_args build_strlist_from_args
+#endif
+#endif /* BUILD_DISABLE_STDINC */
+
+/**
+ * Create a null-terminated array of null-terminated strings from an
+ * existing null-terminated array L.
+ */
+BUILD_DEF Build_StrList build_strlist_from_c(const char* l[]);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_from_c build_strlist_from_c
+#endif
+
+/**
+ * Create a null-terminated array of null-terminated strings from an
+ * existing array L containing LEN amount of null-terminated strings.
+ */
+BUILD_DEF Build_StrList build_strlist_from_c_len(const char* l[], int len);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_from_c_len build_strlist_from_c_len
+#endif
+
+/**
+ * Create a null-terminated array of null-terminated strings from an
+ * existing array L containing LEN amount of null-terminated strings.
+ * Reserve CAP amount of space for null-terminated strings for future
+ * modifications.
+ */
+BUILD_DEF Build_StrList build_strlist_from_c_reserve(const char* l[], int len, int cap);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_from_c_reserve build_strlist_from_c_reserve
+#endif
+
+/**
+ * Clear all contents in L without freeing its memory capacity.
+ */
+BUILD_DEF void build_strlist_clear(Build_StrList* l);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_clear build_strlist_clear
+#endif
+
+/**
+ * Delete and deallocate the buffer and all the items within it in L.
+ */
+BUILD_DEF void build_strlist_delete(Build_StrList* l);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_delete build_strlist_delete
+#endif
+
+/**
+ * Append null-terminated string ARG to L.
+ */
+BUILD_DEF void build_strlist_append_c(Build_StrList* l, const char* arg);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_append_c build_strlist_append_c
+#endif
+
+/**
+ * Append string of byte length LEN to L.
+ */
+BUILD_DEF void build_strlist_append_c_len(Build_StrList* l, const char* arg, int len);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_append_c_len build_strlist_append_c_len
+#endif
+
+#ifndef BUILD_DISABLE_STDINC
+/**
+ * Append multiple null-terminated strings to L. Final argument must
+ * be null.
+ */
+BUILD_DEF void build_strlist_append_args(Build_StrList* l, const char* arg0, ...);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_append_args build_strlist_append_args
+#endif
+#endif /* BUILD_DISABLE_STDINC */
+
+/**
+ * Append all items in ARG to L.
+ */
+BUILD_DEF void build_strlist_append_l(Build_StrList* l, const Build_StrList* arg);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define strlist_append_l build_strlist_append_l
+#endif
+
+#ifdef BUILD_OS_WINDOWS
+BUILD_INTERNAL int build__process_execute_windows(const char* args[]);
+BUILD_INTERNAL int build__directory_new_windows(const char* path);
+#endif
+
+BUILD_INTERNAL void* build__memcpy(void* destination, const void* source, int n);
+BUILD_INTERNAL int build__strlen(const char* s);
+BUILD_INTERNAL char* build__strdup(const char* s);
+BUILD_INTERNAL char* build__strndup(const char* s, int n);
+
+#ifdef __cplusplus
 } /* extern "C" */
 #endif
 
@@ -352,493 +403,424 @@ BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* cmd);
 
 #ifdef BUILD_IMPLEMENTATION
 
+BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char* exe_name)
+{
+   int i;
+   Build_StrList command_args = BUILD__EMPTY_VALUE;
+   Build_StrList objects = BUILD__EMPTY_VALUE;
+   Build_StrBuf output_path = BUILD__EMPTY_VALUE;
+   int result = 0;
+   BUILD_ASSERT(artifact && "missing artifact");
+   BUILD_ASSERT(exe_name && "missing exe name"); /* TODO: default to root dir name */
+
+   /* TODO: utitize *_command_format strings */
+
+   /* #cc# #cflags# */
+   build_strlist_append_c(&command_args, artifact->compiler);
+   build_strlist_append_l(&command_args, &artifact->compile_options);
+
+   if (artifact->source_files.len > 0) {
+      int source_index;
+      int output_index;
+
+      /* ... -c #in -o #out */
+      build_strlist_append_c_len(&command_args, "-c", sizeof("-c") - 1);
+      build_strlist_append_c_len(&command_args, "placeholder", sizeof("placeholder") - 1); /* placeholder index for source file */
+      source_index = command_args.len - 1;
+      build_strlist_append_c_len(&command_args, "-o", sizeof("-o") - 1);
+      build_strlist_append_c_len(&command_args, "placeholder", sizeof("placeholder") - 1); /* placeholder index for output file */
+      output_index = command_args.len - 1;
+
+      for (i = 0; i < artifact->source_files.len; i++) {
+         /* source path */
+         BUILD_MEM_FREE(command_args.bytes[source_index], (build__strlen(command_args.bytes[source_index]) + 1) * sizeof(*command_args.bytes));
+         command_args.bytes[source_index] = build__strdup(artifact->source_files.bytes[i]);
+
+         /* output object path */
+         build_strbuf_clear(&output_path);
+         BUILD_MEM_FREE(command_args.bytes[output_index], (build__strlen(command_args.bytes[output_index]) + 1) * sizeof(*command_args.bytes));
+         build_strbuf_append_c(&output_path, artifact->source_files.bytes[i]);
+         build_strbuf_append_c_len(&output_path, ".o", sizeof(".o") - 1);
+         command_args.bytes[output_index] = build__strndup(output_path.bytes, output_path.len);
+
+         /* run command */
+         result = build_process_execute(&command_args);
+         BUILD_ASSERT(result);
+
+         /* add to object list for linking */
+         build_strlist_append_c_len(&objects, output_path.bytes, output_path.len);
+      }
+   }
+
+   build_strbuf_clear(&output_path);
+   build_strlist_clear(&command_args);
+
+   build_strbuf_append_c(&output_path, exe_name);
+#ifdef BUILD_OS_WINDOWS
+   build_strbuf_append_c_len(&output_path, ".exe", sizeof(".exe") - 1);
+#endif
+
+
+   build_strlist_append_c(&command_args, artifact->linker);
+   build_strlist_append_l(&command_args, &artifact->link_options);
+   build_strlist_append_l(&command_args, &objects);
+   build_strlist_append_c_len(&command_args, "-o", sizeof("-o") - 1);
+   build_strlist_append_c(&command_args, output_path.bytes);
+
+   result = build_process_execute(&command_args);
+
+   return result;
+}
+
+BUILD_DEF int build_process_execute(const Build_StrList* args)
+{
+   if (!args) {
+      return 0;
+   }
+   return build_process_execute_c(args->bytes);
+}
+
+BUILD_DEF int build_process_execute_c(const char* args[])
+{
+   int result = 0;
+#ifdef BUILD_OS_WINDOWS
+   result = build__process_execute_windows(args);
+#else
+   result = 0;
+#endif
+   return result;
+}
+
+BUILD_DEF int build_process_execute_c_len(const char* args[], int len)
+{
+   int result = 0;
+   Build_StrList l = build_strlist_from_c_len(args, len);
+
+   result = build_process_execute_c(l.bytes);
+   build_strlist_delete(&l);
+   return result;
+}
+
 BUILD_DEF int build_directory_new(const char* path)
 {
    int result = 0;
-#if BUILD_OS_WINDOWS
-   result = build__windows_directory_new(path);
+#ifdef BUILD_OS_WINDOWS
+   result = build__directory_new_windows(path);
 #else
    result = 0;
 #endif
    return result;
 }
 
-BUILD_DEF Build_StringBuffer build_string_buffer_new(const char* data)
+BUILD_DEF Build_StrBuf build_strbuf_from_c(const char* s)
 {
-   return build_string_buffer_new_count(data, build__strlen(data));
+   return build_strbuf_from_c_len(s, build__strlen(s));
 }
 
-BUILD_DEF Build_StringBuffer build_string_buffer_new_count(const char* data, int count)
+BUILD_DEF Build_StrBuf build_strbuf_from_c_len(const char* s, int len)
 {
-   return build_string_buffer_new_capacity(data, count, count + 1);
+   return build_strbuf_from_c_reserve(s, len, len + 1);
 }
 
-BUILD_DEF Build_StringBuffer build_string_buffer_new_capacity(const char* data, int count, int capacity)
+BUILD_DEF Build_StrBuf build_strbuf_from_c_reserve(const char* s, int len, int cap)
 {
-   Build_StringBuffer result = BUILD__EMPTY_VALUE;
+   Build_StrBuf result;
+   BUILD_ASSERT(len >= 0 && len < cap);
 
-   BUILD_ASSERT(count >= 0 && count < capacity && "invalid bounds (0 <= count < capacity)");
-
-   result.data = (char*)BUILD_MEM_ALLOC(sizeof(*result.data) * capacity);
-   BUILD_ASSERT(result.data && "allocation failure");
-
-   result.capacity = capacity;
-
-   build__memcpy(result.data, data, count);
-   result.data[count] = '\0';
-   result.count = count;
-
+   result.bytes = (char*)BUILD_MEM_ALLOC(cap * sizeof(*result.bytes));
+   BUILD_ASSERT(result.bytes && "failed to allocate memory");
+   result.cap = cap;
+   build__memcpy(result.bytes, s, len);
+   result.len = len;
+   result.bytes[result.len] = '\0';
    return result;
 }
 
-BUILD_DEF void build_string_buffer_delete(Build_StringBuffer* s)
+BUILD_DEF void build_strbuf_clear(Build_StrBuf* s)
 {
-   if (!s || !s->data) {
-      return;
-   }
+   BUILD_ASSERT(s && "missing strbuf");
 
-   BUILD_MEM_FREE(s->data, sizeof(*s->data) * s->capacity);
-   s->data = NULL;
-   s->count = 0;
-   s->capacity = 0;
+   while (s->len-- > 0) {
+      s->bytes[s->len] = 0;
+   }
+   s->len = 0;
 }
 
-BUILD_DEF void build_string_buffer_clear(Build_StringBuffer* s)
+BUILD_DEF void build_strbuf_delete(Build_StrBuf* s)
 {
-   if (!s || !s->data) {
-      return;
-   }
+   BUILD_ASSERT(s && "missing strbuf");
 
-   while (s->count-- > 0) {
-      s->data[s->count] = 0;
+   if (s->bytes) {
+      BUILD_MEM_FREE(s->bytes, s->cap * sizeof(*s->bytes));
+      s->bytes = NULL;
    }
-   s->count = 0;
+   s->len = 0;
+   s->cap = 0;
 }
 
-BUILD_DEF Build_StringBuffer build_string_buffer_append(Build_StringBuffer* s, const char* arg)
+BUILD_DEF void build_strbuf_append_c(Build_StrBuf* s, const char* arg)
 {
-   return build_string_buffer_append_count(s, arg, build__strlen(arg));
+   build_strbuf_append_c_len(s, arg, build__strlen(arg));
 }
 
-BUILD_DEF Build_StringBuffer build_string_buffer_append_count(Build_StringBuffer* s, const char* arg, int arg_count)
+BUILD_DEF void build_strbuf_append_c_len(Build_StrBuf* s, const char* arg, int len)
 {
-   int new_count;
+   int new_len;
+   BUILD_ASSERT(s && "missing strbuf");
 
-   if (!s) {
-      return build_string_buffer_new_count(arg, arg_count);
-   }
-
-   new_count = s->count + arg_count;
-   if (s->capacity == 0) {
-      int new_capacity = new_count + 1;
-
-      s->data = (char*)BUILD_MEM_ALLOC(sizeof(*s->data) * new_capacity);
-      BUILD_ASSERT(s->data && "allocation failure");
-
-      s->capacity = new_capacity;
-   } else if (new_count >= s->capacity) {
-      int new_capacity = s->capacity * 2;
-      int old_size = sizeof(*s->data) * s->capacity;
-      int new_size;
-      char* tmp;
-
-      BUILD__MAYBE_UNUSED(old_size);
-
-      while (new_capacity <= new_count) {
-         new_capacity *= 2;
+   new_len = s->len + len;
+   if (s->cap == 0) {
+      s->bytes = (char*)BUILD_MEM_ALLOC((new_len + 1) * sizeof(*s->bytes));
+      BUILD_ASSERT(s->bytes && "failed to allocate memory");
+      s->cap = new_len + 1;
+   } else if (new_len >= s->cap) {
+      int new_cap = s->cap * 2;
+      while (new_cap <= new_len) {
+         new_cap *= 2;
+         BUILD_ASSERT(new_cap > 0);
       }
-      new_size = sizeof(*s->data) * new_capacity;
 
-      tmp = (char*)BUILD_MEM_REALLOC(s->data, new_size, old_size);
-      BUILD_ASSERT(tmp && "allocation failure");
-      s->data = tmp;
-      s->capacity = new_capacity;
+      s->bytes = (char*)BUILD_MEM_REALLOC(s->bytes, new_cap * sizeof(*s->bytes), s->cap * sizeof(*s->bytes));
+      BUILD_ASSERT(s->bytes);
+      s->cap = new_cap;
    }
 
-   build__memcpy(s->data + s->count, arg, arg_count);
-   s->count = new_count;
-   s->data[new_count] = '\0';
-
-   return *s;
+   memcpy(s->bytes + s->len, arg, len);
+   s->len = new_len;
+   s->bytes[s->len] = '\0';
 }
 
-/* TODO: non-null data doesn't seem to work correctly */
-BUILD_DEF Build_StringList build_string_list_new(const char* const* data)
-{
-   int count = 0;
-   if (data) {
-      while (*data++) {
-         count++;
-      }
-   }
-   return build_string_list_new_count(data, count);
-}
 
-#ifndef BUILD_NO_STDINC
-BUILD_DEF Build_StringList build_string_list_new_varargs(const char* item1, ...)
+#ifndef BUILD_DISABLE_STDINC
+BUILD_DEF Build_StrList build_strlist_from_args(const char* arg_0, ...)
 {
    va_list args;
    const char* arg;
-   Build_StringList result = build_string_list_new(NULL);
+   Build_StrList result = BUILD__EMPTY_VALUE;
 
-   if (!item1) {
-      return result;
+   if (!arg_0) {
+      return build_strlist_from_c(NULL);
    }
 
-   build_string_list_append_string(&result, item1);
+   build_strlist_append_c(&result, arg_0);
 
-   va_start(args, item1);
-   while((arg = va_arg(args, const char*))) {
-      build_string_list_append_string(&result, arg);
-   }
-   va_end(args);
-
-   return result;
-}
-#endif
-
-BUILD_DEF Build_StringList build_string_list_new_count(const char* const* data, int count)
-{
-   return build_string_list_new_capacity(data, count, count + 1);
-}
-
-BUILD_DEF Build_StringList build_string_list_new_capacity(const char* const* data, int count, int capacity)
-{
-   Build_StringList result = BUILD__EMPTY_VALUE;
-
-   BUILD_ASSERT(count >= 0 && count < capacity && "invalid bounds (0 <= count < capacity)");
-
-   result.data = (char**)BUILD_MEM_ALLOC(sizeof(*result.data) * capacity);
-   BUILD_ASSERT(result.data && "allocation failure");
-   result.capacity = capacity;
-
-   for (result.count = 0; result.count < count; result.count++) {
-      char* tmp = build__strdup(data[result.count]);
-      result.data[result.count] = tmp;
-   }
-   result.data[result.count] = NULL;
-
-   return result;
-}
-
-BUILD_DEF void build_string_list_delete_all(Build_StringList* l)
-{
-   int i;
-
-   if (!l || !l->data) {
-      return;
-   }
-
-   for (i = 0; i < l->count; i++) {
-      BUILD_MEM_FREE(l->data[i], sizeof(*l->data[i]) * (build__strlen(l->data[i]) + 1));
-   }
-   BUILD_MEM_FREE(l->data, sizeof(*l->data) * l->capacity);
-   l->data = NULL;
-   l->count = 0;
-   l->capacity = 0;
-}
-
-BUILD_DEF void build_string_list_delete_items(Build_StringList* l)
-{
-   if (!l || !l->data) {
-      return;
-   }
-
-   for (; l->count-- > 0;) {
-      int i = l->count;
-      BUILD__MAYBE_UNUSED(i);
-
-      BUILD_MEM_FREE(l->data[i], sizeof(*l->data[i]) * (build__strlen(l->data[i]) + 1));
-   }
-   l->count = 0;
-   l->data[l->count] = NULL;
-}
-
-BUILD_DEF Build_StringList build_string_list_append_string(Build_StringList* l, const char* arg)
-{
-   return build_string_list_append_string_count(l, arg, build__strlen(arg));
-}
-
-#ifndef BUILD_NO_STDINC
-BUILD_DEF Build_StringList build_string_list_append_string_varargs(Build_StringList* l, ...)
-{
-   const char* arg;
-   va_list args;
-   Build_StringList result;
-
-   va_start(args, l);
+   va_start(args, arg_0);
    while ((arg = va_arg(args, const char*))) {
-      result = build_string_list_append_string(l, arg);
+      build_strlist_append_c(&result, arg);
    }
    va_end(args);
 
    return result;
 }
-#endif
+#endif /* BUILD_DISABLE_STDINC */
 
-BUILD_DEF Build_StringList build_string_list_append_string_count(Build_StringList* l, const char* arg, int arg_count)
-{
-   int new_count;
-   char* arg_clone = NULL;
-
-   if (!l) {
-      Build_StringList result = build_string_list_new(NULL);
-      return build_string_list_append_string_count(&result, arg, arg_count);
-   }
-
-   new_count = l->count + 1;
-   if (l->capacity == 0) {
-      l->data = (char**)BUILD_MEM_ALLOC(sizeof(*l->data) * (new_count + 1));
-      BUILD_ASSERT(l->data && "allocation failure");
-   } else if (new_count >= l->capacity) {
-      char** tmp;
-      int new_capacity = l->capacity * 2;
-      int old_size = sizeof(*l->data) * l->capacity;
-      int new_size = sizeof(*l->data) * new_capacity;
-
-      BUILD_ASSERT(old_size >= 0);
-      BUILD_ASSERT(new_size >= 0 && new_size >= old_size);
-
-      tmp = (char**)BUILD_MEM_REALLOC(l->data, new_size, old_size);
-      BUILD_ASSERT(tmp && "allocation failure");
-
-      l->data = tmp;
-      l->capacity = new_capacity;
-   }
-
-   arg_clone = build__strndup(arg, arg_count);
-   l->data[l->count++] = arg_clone;
-   l->data[l->count] = NULL;
-
-   return *l;
-}
-
-BUILD_DEF Build_StringList build_string_list_append_list(Build_StringList* l, const Build_StringList* args)
-{
-   int old_count;
-   int new_count;
-   int i;
-
-   if (!l) {
-      Build_StringList result = build_string_list_new(NULL);
-      return build_string_list_append_list(&result, args);
-   }
-
-   if (!args || !args->data || args->count == 0) {
-      return *l;
-   }
-
-   old_count = l->count;
-   new_count = l->count + args->count;
-   if (l->capacity == 0) {
-      int new_capacity = new_count + 1;
-
-      l->data = (char**)BUILD_MEM_ALLOC(sizeof(*l->data) * new_capacity);
-      BUILD_ASSERT(l->data && "allocation failure");
-
-      l->capacity = new_capacity;
-   } else if (new_count >= l->capacity) {
-      char** tmp;
-      int new_capacity = l->capacity * 2;
-      int old_size;
-      int new_size;
-
-      BUILD__MAYBE_UNUSED(old_size);
-
-      while (new_capacity <= new_count) {
-         new_capacity *= 2;
-      }
-      old_size = sizeof(*l->data) * l->capacity;
-      new_size = sizeof(*l->data) * new_capacity;
-
-      tmp = (char**)BUILD_MEM_REALLOC(l->data, new_size, old_size);
-      BUILD_ASSERT(tmp && "allocation failure");
-
-      l->data = tmp;
-      l->capacity = new_capacity;
-   }
-
-   for (i = old_count; i < new_count; i++, l->count++) {
-      char* arg_clone = build__strdup(args->data[i - old_count]);
-      l->data[i] = arg_clone;
-   }
-   l->data[l->count] = NULL;
-
-   return *l;
-}
-
-BUILD_DEF int build_process_execute(Build_StringList* cmd)
-{
-   int result = 0;
-#if BUILD_OS_WINDOWS
-   result = build__windows_process_execute(cmd);
-#else
-   result = 0;
-#endif
-   return result;
-}
-
-BUILD_DEF int build_target_compile_object(const Build_CompileTarget* target, const char* obj_stem)
-{
-   Build_StringList command_args;
-   Build_StringBuffer obj_path;
-   int obj_stem_count = build__strlen(obj_stem);
-   int result = 0;
-
-   BUILD_ASSERT(target);
-   BUILD_ASSERT(obj_stem); /* TODO: default exe name (probably use parent dir?) */
-
-   command_args = build_string_list_new(NULL);
-
-   /* TODO: check if compiler is MSVC (create a macro defining compiler command format) */
-
-   obj_path = build_string_buffer_new_capacity(obj_stem, obj_stem_count, obj_stem_count + sizeof(".o"));
-   build_string_buffer_append(&obj_path, ".o");
-
-   build_string_list_append_string(&command_args, target->compiler);
-
-   build_string_list_append_list(&command_args, &target->compile_flags);
-   build_string_list_append_list(&command_args, &target->linker_flags);
-   build_string_list_append_list(&command_args, &target->source_files);
-
-   build_string_list_append_string(&command_args, "-o");
-   build_string_list_append_string_count(&command_args, obj_path.data, obj_path.count);
-
-   if (!build_process_execute(&command_args)) {
-      result = 0;
-   } else {
-      result = 1;
-   }
-
-   build_string_buffer_delete(&obj_path);
-   build_string_list_delete_all(&command_args);
-   return result;
-}
-
-BUILD_DEF int build_target_compile_executable(const Build_CompileTarget* target, const char* exe_stem)
-{
-   Build_StringList command_args;
-   Build_StringBuffer exe_path;
-   int exe_stem_count = build__strlen(exe_stem);
-   int result = 0;
-
-   BUILD_ASSERT(target);
-   BUILD_ASSERT(exe_stem); /* TODO: default exe name (probably use parent dir?) */
-
-   command_args = build_string_list_new(NULL);
-
-   /* TODO: check if compiler is MSVC (create a macro defining compiler command format) */
-
-   /* TODO: platform specific function to create exe_path */
-   exe_path = build_string_buffer_new_capacity(exe_stem, exe_stem_count, exe_stem_count + sizeof(".exe"));
-   build_string_buffer_append(&exe_path, ".exe");
-
-   build_string_list_append_string(&command_args, target->compiler);
-
-   build_string_list_append_list(&command_args, &target->compile_flags);
-   build_string_list_append_list(&command_args, &target->linker_flags);
-   build_string_list_append_list(&command_args, &target->source_files);
-
-   build_string_list_append_string(&command_args, "-o");
-   build_string_list_append_string_count(&command_args, exe_path.data, exe_path.count);
-
-   if (!build_process_execute(&command_args)) {
-      result = 0;
-   } else {
-      result = 1;
-   }
-
-   build_string_buffer_delete(&exe_path);
-   build_string_list_delete_all(&command_args);
-   return result;
-}
-
-BUILD_INTERNAL_DEF void* build__memcpy(void* destination, const void* source, int n)
-{
-   int i;
-   for (i = 0; i < n; i++) {
-      ((char*)destination)[i] = ((const char*)source)[i];
-   }
-   return destination;
-}
-
-BUILD_INTERNAL_DEF char* build__strdup(const char* s)
-{
-   return build__strndup(s, build__strlen(s));
-}
-
-BUILD_INTERNAL_DEF char* build__strndup(const char* s, int n)
-{
-   char* result = NULL;
-   int s_count = (n >= 0) ? (n) : (1);
-
-   if (!s) {
-      return NULL;
-   }
-
-   result = (char*)BUILD_MEM_ALLOC(sizeof(*result) * (s_count + 1));
-   BUILD_ASSERT(result && "allocation failure");
-
-   build__memcpy(result, s, s_count);
-   result[s_count] = '\0';
-   return result;
-}
-
-BUILD_INTERNAL_DEF int build__strlen(const char* s)
+BUILD_DEF Build_StrList build_strlist_from_c(const char* l[])
 {
    int len = 0;
-   if (s) {
-      while (*s++) {
+   if (l) {
+      while (l[len]) {
          len++;
       }
    }
-   return len;
+   return build_strlist_from_c_len(l, len);
 }
 
-#if BUILD_OS_WINDOWS
-BUILD_INTERNAL_DEF int build__windows_directory_new(const char* path)
+BUILD_DEF Build_StrList build_strlist_from_c_len(const char* l[], int len)
 {
-   int result = 1;
-   int i = 0;
-   char* path_cstr = build__strdup(path);
-   int path_len = build__strlen(path);
-   char temp_char = '\0';
+   return build_strlist_from_c_reserve(l, len, len + 1);
+}
 
-   for (i = 0; i < path_len; i++) {
-      if (path_cstr[i] == '/' || path_cstr[i] == '\\') {
-         temp_char = path_cstr[i];
-         path_cstr[i] = '\0';
-         result = CreateDirectoryA(path_cstr, NULL);
-         path_cstr[i] = temp_char;
-      } else if (i == (path_len - 1)) {
-         result = CreateDirectoryA(path_cstr, NULL);
-      }
+BUILD_DEF Build_StrList build_strlist_from_c_reserve(const char* l[], int len, int cap)
+{
+   Build_StrList result;
+   BUILD_ASSERT(len >= 0 && len < cap);
 
-      if (!result) {
-         if (GetLastError() != ERROR_ALREADY_EXISTS) {
-            result = 0;
-            break;
-         } else {
-            result = 1;
-         }
-      }
+   result.bytes = (const char**)BUILD_MEM_ALLOC(cap * sizeof(*result.bytes));
+   BUILD_ASSERT(result.bytes && "failed to allocate memory");
+   result.cap = cap;
+   for (result.len = 0; result.len < len; result.len++) {
+      result.bytes[result.len] = build__strdup(l[result.len]);
    }
-
-   BUILD_MEM_FREE(path_cstr, sizeof(*path_cstr) * (path_len + 1));
+   result.bytes[result.len] = NULL;
    return result;
 }
 
-BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* args)
+BUILD_DEF void build_strlist_clear(Build_StrList* l)
 {
+   BUILD_ASSERT(l && "missing strlist");
+
+   while (l->len-- > 0) {
+      int i = l->len;
+      BUILD_MEM_FREE(l->bytes[i], (build__strlen(l->bytes[i]) + 1) * sizeof(*l->bytes[i]));
+   }
+   l->len = 0;
+}
+
+BUILD_DEF void build_strlist_delete(Build_StrList* l)
+{
+   int i;
+   BUILD_ASSERT(l && "missing strlist");
+
+   if (l->bytes) {
+      for (i = 0; i < l->len; i++) {
+         BUILD_MEM_FREE(l->bytes[i], (build__strlen(l->bytes[i]) + 1) * sizeof(*l->bytes[i]));
+      }
+      BUILD_MEM_FREE(l->bytes, l->cap * sizeof(*l->bytes));
+   }
+   l->bytes = NULL;
+   l->len = 0;
+   l->cap = 0;
+}
+
+BUILD_DEF void build_strlist_append_c(Build_StrList* l, const char* arg)
+{
+   build_strlist_append_c_len(l, arg, build__strlen(arg));
+}
+
+BUILD_DEF void build_strlist_append_c_len(Build_StrList* l, const char* arg, int len)
+{
+   char* clone;
+   BUILD_ASSERT(l && "missing strlist");
+
+   if (l->cap == 0) {
+      l->bytes = (const char**)BUILD_MEM_ALLOC(2 * sizeof(*l->bytes));
+      BUILD_ASSERT(l->bytes && "failed to allocate memory");
+      l->len = 0;
+      l->cap = 2;
+      l->bytes[0] = NULL;
+   } else if (l->len + 1 >= l->cap) {
+      BUILD_ASSERT(l->cap * 2 > l->len + 1 && "overflow");
+      l->bytes = (const char**)BUILD_MEM_REALLOC(l->bytes, (l->cap * 2) * sizeof(*l->bytes), l->cap * sizeof(*l->bytes));
+      BUILD_ASSERT(l->bytes && "failed to reallocate memory");
+      l->cap *= 2;
+   }
+   clone = build__strndup(arg, len);
+   l->bytes[l->len++] = clone;
+   l->bytes[l->len] = NULL;
+}
+
+#ifndef BUILD_DISABLE_STDINC
+BUILD_DEF void build_strlist_append_args(Build_StrList* l, const char* arg_0, ...)
+{
+   va_list args;
+   const char* arg;
+   BUILD_ASSERT(l && "missing strlist");
+
+   if (!arg_0) {
+      return;
+   }
+
+   build_strlist_append_c(l, arg_0);
+
+   va_start(args, arg_0);
+   while ((arg = va_arg(args, const char*))) {
+      build_strlist_append_c(l, arg);
+   }
+   va_end(args);
+}
+#endif /* BUILD_DISABLE_STDINC */
+
+/**
+ * Append all items in ARG to L.
+ */
+BUILD_DEF void build_strlist_append_l(Build_StrList* l, const Build_StrList* arg)
+{
+   int i;
+   int new_len;
+
+   if (!l) {
+      return;
+   }
+
+   if (!arg || arg->cap == 0) {
+      return;
+   }
+
+   /* preallocate memory if necessary */
+   new_len = l->len + arg->len;
+   if (l->cap == 0) {
+      int new_cap = new_len + 1;
+      l->bytes = (const char**)BUILD_MEM_ALLOC(new_cap * sizeof(*l->bytes));
+      BUILD_ASSERT(l->bytes && "failed to allocate memory");
+      l->cap = new_cap;
+   } else if (l->cap <= new_len) {
+      int new_cap = l->cap * 2;
+      while (new_cap <= new_len) {
+         new_cap *= 2;
+         BUILD_ASSERT(new_cap > l->cap && "overflow");
+      }
+      l->bytes = (const char**)BUILD_MEM_REALLOC(l->bytes, new_cap * sizeof(*l->bytes), l->cap * sizeof(*l->bytes));
+      BUILD_ASSERT(l->bytes && "failed to reallocate memory");
+      l->cap = new_cap;
+   }
+
+   for (i = 0; i < arg->len; i++) {
+      build_strlist_append_c(l, arg->bytes[i]);
+   }
+}
+
+#ifdef BUILD_OS_WINDOWS
+BUILD_INTERNAL int build__process_execute_windows(const char* args[])
+{
+   int result = 0;
+   int i;
+   Build_StrBuf command = BUILD__EMPTY_VALUE;
    STARTUPINFO startup = BUILD__EMPTY_VALUE;
    PROCESS_INFORMATION process = BUILD__EMPTY_VALUE;
-   int result = 0;
-   Build_StringBuffer command_line;
 
-   BUILD_ASSERT(args);
+   if (!args) {
+      goto ret;
+   }
 
-   command_line = string_buffer_new(NULL);
-   build__windows_command_list_join(args, &command_line);
+   ZeroMemory(&startup, sizeof(startup));
+   ZeroMemory(&process, sizeof(process));
+
+   for (i = 0; args[i]; i++) { /* join and escape args */
+      int len = build__strlen(args[i]);
+      int backslashes = 0;
+      int j = 0;
+
+      if (i > 0) {
+         build_strbuf_append_c(&command, " ");
+      }
+
+      if (len != 0) {
+         for (j = 0; j < len; j++) {
+            char it = args[i][j];
+            if (it == ' ' || it == '\t' || it == '\f' || it == '\"') {
+               break;
+            }
+         }
+
+         if (j >= len) {
+            build_strbuf_append_c_len(&command, args[i], len);
+            continue;
+         }
+      }
+
+      build_strbuf_append_c(&command, "\"");
+
+      for (j = 0; j < len; j++) {
+         char c = args[i][j];
+         if (c == '\\') {
+            backslashes++;
+         } else {
+            if (c == '\"') {
+               int k;
+               for (k = 0; k < backslashes + 1; k++) {
+                  build_strbuf_append_c(&command, "\\");
+               }
+            }
+            backslashes = 0;
+         }
+         build_strbuf_append_c_len(&command, &c, 1);
+      }
+
+      for (j = 0; j < backslashes; j++) {
+         build_strbuf_append_c(&command, "\\");
+      }
+      build_strbuf_append_c(&command, "\"");
+   }
 
    startup.cb = sizeof(STARTUPINFO);
    startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -858,78 +840,91 @@ BUILD_INTERNAL_DEF int build__windows_process_execute(Build_StringList* args)
    }
    startup.dwFlags |= STARTF_USESTDHANDLES;
 
-   if (!CreateProcessA(NULL, command_line.data, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process)) {
+   if (!CreateProcessA(NULL, command.bytes, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process)) {
       /* TODO: logging */
       goto ret;
    }
 
+   WaitForSingleObject(process.hProcess, INFINITE);
+   CloseHandle(process.hProcess);
    CloseHandle(process.hThread);
    result = 1;
-
 ret:
-   string_buffer_delete(&command_line);
+   build_strbuf_delete(&command);
    return result;
 }
 
-BUILD_INTERNAL_DEF void build__windows_command_list_join(Build_StringList* list, Build_StringBuffer* buf)
+BUILD_INTERNAL int build__directory_new_windows(const char* path)
+{
+   int result = 1;
+   int i = 0;
+   int path_len = build__strlen(path);
+   char* path_cstr = build__strndup(path, path_len);
+   char temp_char = '\0';
+
+   for (i = 0; i < path_len; i++) {
+      if (path_cstr[i] == '/' || path_cstr[i] == '\\') {
+         temp_char = path_cstr[i];
+         path_cstr[i] = '\0';
+         result = CreateDirectoryA(path_cstr, NULL);
+         path_cstr[i] = temp_char;
+      } else if (i == (path_len - 1)) {
+         result = CreateDirectoryA(path_cstr, NULL);
+      }
+
+      if (!result) {
+         DWORD err = GetLastError();
+         if (err != ERROR_ALREADY_EXISTS || err != ERROR_PATH_NOT_FOUND) {
+            /* TODO: logging */
+            result = 0;
+            goto ret;
+         }
+      }
+   }
+
+ret:
+   BUILD_MEM_FREE(path_cstr, (path_len + 1) * sizeof(*path_cstr));
+   return result;
+}
+#endif
+
+BUILD_INTERNAL void* build__memcpy(void* destination, const void* source, int n)
 {
    int i;
+   BUILD_ASSERT(n >= 0);
 
-   BUILD_ASSERT(list && list->data && "uninitialized");
-   BUILD_ASSERT(buf && buf->data && "uninitialized");
-
-   for (i = 0; i < list->count; i++) {
-      int len = build__strlen(list->data[i]);
-      int backslashes = 0;
-      int j = 0;
-
-      if (list->data[i] == NULL) {
-         break;
-      }
-
-      if (i > 0) {
-         build_string_buffer_append(buf, " ");
-      }
-
-      if (len != 0) { /* check if string really needs to be quoted/escaped */
-         int k;
-         for (k = 0; k < len; k++) {
-            char it = list->data[i][k];
-            if (it == ' ' || it == '\t' || it == '\f' || it == '\"') {
-               break;
-            }
-         }
-
-         if (k >= len) { /* string doesn't need to be quoted/escaped */
-            build_string_buffer_append_count(buf, list->data[i], len);
-            continue;
-         }
-      }
-
-      build_string_buffer_append(buf, "\"");
-
-      for (j = 0; j < len; j++) {
-         char c = list->data[i][j];
-         if (c == '\\') {
-            backslashes++;
-         } else {
-            if (c == '\"') {
-               int k = 0;
-               for (k = 0; k < backslashes + 1; k++) {
-                  build_string_buffer_append(buf, "\\");
-               }
-            }
-            backslashes = 0;
-         }
-         build_string_buffer_append_count(buf, &c, 1);
-      }
-
-      for (j = 0; j < backslashes; j++) {
-         build_string_buffer_append(buf, "\\");
-      }
-      build_string_buffer_append(buf, "\"");
+   for (i = 0; i < n; i++) {
+      ((char*)destination)[i] = ((const char*)source)[i];
    }
+   return destination;
 }
-#endif /* BUILD_OS_WINDOWS */
+
+BUILD_INTERNAL int build__strlen(const char* s)
+{
+   int len = 0;
+   if (s) {
+      while (*s++) {
+         len++;
+      }
+   }
+   return len;
+}
+
+BUILD_INTERNAL char* build__strdup(const char* s)
+{
+   return build__strndup(s, build__strlen(s));
+}
+
+BUILD_INTERNAL char* build__strndup(const char* s, int n)
+{
+   char* result = NULL;
+   BUILD_ASSERT(n >= 0);
+
+   result = (char*)BUILD_MEM_ALLOC((n + 1) * sizeof(*result));
+   BUILD_ASSERT(result && "failed to allocate memory");
+   build__memcpy(result, s, n);
+   result[n] = '\0';
+   return result;
+}
 
 #endif /* BUILD_IMPLEMENTATION */
