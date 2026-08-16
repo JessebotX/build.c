@@ -94,7 +94,7 @@ License
 #elif defined(BUILD_OS_LINUX)
    #include <sys/stat.h>
    #include <sys/types.h>
-   #include <unistd.h>r
+   #include <unistd.h>
 #endif
 
 #ifndef BUILD_DISABLE_STDINC
