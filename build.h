@@ -89,6 +89,7 @@ License
 #endif
 
 #if defined(BUILD_OS_WINDOWS)
+   /* NOTE: bug with tcc, cant find GetFileSizeEx */
    #define WIN32_LEAN_AND_MEAN
    #include <Windows.h>
 #elif defined(BUILD_OS_LINUX)
