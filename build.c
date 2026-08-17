@@ -82,13 +82,15 @@ int main(int argc, char** argv)
 
       printf("=== END Test 4 ===\n\n");
    }
-#endif
    Build_Artifact artifact = (Build_Artifact){
       .compiler = "clang",
       .compile_options = build_strlist_from_args("-O0", "-g3", NULL),
       .source_files = build_strlist_from_args("build.c", NULL),
    };
    build_artifact_new_executable(&artifact, "my_program");
+#endif
+
+   build_directory_delete("out");
 
    return 0;
 }

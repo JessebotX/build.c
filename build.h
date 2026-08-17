@@ -290,6 +290,22 @@ BUILD_DEF int build_file_write_all_c_len(const char* path, const char* content, 
 #endif
 
 /**
+ * Delete directory at PATH (a null-terminated string).
+ */
+BUILD_DEF int build_directory_delete(const char* path);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define directory_delete build_directory_delete
+#endif
+
+/**
+ * Delete directory at PATH (a string with byte length of LEN).
+ */
+BUILD_DEF int build_directory_delete_len(const char* path, int len);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define directory_delete_len build_directory_delete_len
+#endif
+
+/**
  * Create a new directory at PATH, and creates parent path elements if
  * necessary. If PATH is not absolute, it will be relative to the
  * current directory.
@@ -506,6 +522,7 @@ BUILD_DEF void build_strlist_append_l(Build_StrList* l, const Build_StrList* arg
 BUILD_INTERNAL int build__directory_set_windows(const char* path);
 BUILD_INTERNAL int build__process_execute_windows(const char* args[], Build_StrBuf* buf);
 BUILD_INTERNAL int build__directory_new_windows(const char* path);
+BUILD_INTERNAL int build__directory_delete_len_windows(const char* path, int len);
 BUILD_INTERNAL Build_StrBuf build__file_read_all_windows(const char* path);
 #endif
 
@@ -513,6 +530,7 @@ BUILD_INTERNAL void* build__memcpy(void* destination, const void* source, int n)
 BUILD_INTERNAL int build__strlen(const char* s);
 BUILD_INTERNAL char* build__strdup(const char* s);
 BUILD_INTERNAL char* build__strndup(const char* s, int n);
+BUILD_INTERNAL int build__strncmp(const char* a, const char* b, int n);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -715,6 +733,22 @@ BUILD_DEF int build_file_write_all_c_len(const char* path, const char* content, 
 ret_cleanup:
    CloseHandle(file);
 ret:
+   return result;
+}
+
+BUILD_DEF int build_directory_delete(const char* path)
+{
+   return build_directory_delete_len(path, build__strlen(path));
+}
+
+BUILD_DEF int build_directory_delete_len(const char* path, int len)
+{
+   int result = 0;
+#ifdef BUILD_OS_WINDOWS
+   result = build__directory_delete_len_windows(path, len);
+#else
+   result = 0
+#endif
    return result;
 }
 
@@ -1103,6 +1137,68 @@ ret:
    return result;
 }
 
+BUILD_INTERNAL int build__directory_delete_len_windows(const char* path, int len)
+{
+   int result = 0;
+   HANDLE file;
+   WIN32_FIND_DATA file_data;
+   Build_StrBuf dir = build_strbuf_from_c_len(path, len);
+   int first_time = 1;
+   Build_StrBuf full_path = build_strbuf_from_c_len(path, len);
+
+   if (dir.len == 0) {
+      result = 1;
+      goto ret_cleanup;
+   }
+
+   BUILD_STRBUF_APPEND_LITERAL(&dir, "\\*");
+
+   if (dir.len == 0) {
+      goto ret_cleanup;
+   }
+
+   file = FindFirstFileA(dir.bytes, &file_data);
+   if (file == INVALID_HANDLE_VALUE) {
+      goto ret_cleanup;
+   }
+
+   do {
+      if (first_time) {
+         first_time = 0;
+         continue;
+      }
+
+      BUILD_STRBUF_APPEND_LITERAL(&full_path, "\\");
+      build_strbuf_append_c(&full_path, file_data.cFileName);
+
+      if (file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+         if (build__strncmp(file_data.cFileName, "..", sizeof("..") - 1) != 0
+             && build__strncmp(file_data.cFileName, ".", sizeof(".") - 1) != 0) {
+            build__directory_delete_len_windows(full_path.bytes, full_path.len);
+         }
+      } else {
+         DeleteFileA(full_path.bytes);
+      }
+
+      while (full_path.len > len) {
+         full_path.bytes[full_path.len - 1] = '\0';
+         full_path.len--;
+      }
+   } while (FindNextFile(file, &file_data) != 0);
+
+   /* Remove "\\*" from the path */
+   dir.bytes[dir.len - 1] = '\0';
+   dir.len--;
+   dir.bytes[dir.len - 1] = '\0';
+   dir.len--;
+
+   RemoveDirectoryA(dir.bytes);
+
+ret_cleanup:
+   /* TODO */
+   return result;
+}
+
 BUILD_INTERNAL int build__directory_new_windows(const char* path)
 {
    int result = 1;
@@ -1174,6 +1270,20 @@ BUILD_INTERNAL char* build__strndup(const char* s, int n)
    build__memcpy(result, s, n);
    result[n] = '\0';
    return result;
+}
+
+BUILD_INTERNAL int build__strncmp(const char* a, const char* b, int n)
+{
+   int i;
+   BUILD_ASSERT(n >= 0);
+
+   for (i = 0; i < n; i++) {
+      int diff = a[i] - b[i];
+      if (diff != 0) {
+         return diff;
+      }
+   }
+   return 0;
 }
 
 #endif /* BUILD_IMPLEMENTATION */
