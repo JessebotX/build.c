@@ -269,6 +269,27 @@ BUILD_DEF int build_file_read_all_b(const char* path, Build_StrBuf* buf);
 #endif
 
 /**
+ * Create/overwrite a file at PATH with CONTENT, which is a
+ * null-terminated sequence of bytes. Returns the number of bytes
+ * written on success, and a number < 0 on failure.
+ */
+BUILD_DEF int build_file_write_all_c(const char* path, const char* content);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define file_write_all_c build_file_write_all_c
+#endif
+
+/**
+ * Create/overwrite a file at PATH with CONTENT, which is a sequence
+ * of bytes that is CONTENT_LEN bytes long (excluding null
+ * terminator). Returns the number of bytes written on success, and a
+ * number < 0 on failure.
+ */
+BUILD_DEF int build_file_write_all_c_len(const char* path, const char* content, int content_len);
+#ifndef BUILD_DISABLE_SHORT_NAMES
+   #define file_write_all_c_len build_file_write_all_c_len
+#endif
+
+/**
  * Create a new directory at PATH, and creates parent path elements if
  * necessary. If PATH is not absolute, it will be relative to the
  * current directory.
@@ -669,6 +690,32 @@ ret_cleanup:
    CloseHandle(file);
 ret:
    return bytes_read;
+}
+
+BUILD_DEF int build_file_write_all_c(const char* path, const char* content)
+{
+   return build_file_write_all_c_len(path, content, build__strlen(content));
+}
+
+BUILD_DEF int build_file_write_all_c_len(const char* path, const char* content, int content_len)
+{
+   int result = -1;
+   HANDLE file;
+   DWORD bytes_written = 0;
+   BUILD_ASSERT(content_len >= 0);
+
+   file = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+   if (file == INVALID_HANDLE_VALUE) {
+      goto ret;
+   }
+   if (!WriteFile(file, content, content_len, &bytes_written, NULL)) {
+      goto ret_cleanup;
+   }
+   result = bytes_written;
+ret_cleanup:
+   CloseHandle(file);
+ret:
+   return result;
 }
 
 BUILD_DEF int build_directory_new(const char* path)
