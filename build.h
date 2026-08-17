@@ -187,7 +187,7 @@ struct Build_StrList {
 typedef struct Build_Artifact Build_Artifact;
 struct Build_Artifact {
    const char* compiler;
-   const char* linker;
+   const char* linker; /* default: use compiler */
    const char** compile_command_format; /* default: "#cc", "#cflags", "-c", "#in", "-o", "#out", NULL */
    const char** link_command_format; /* default: "#cc", "#ldflags", "#in", "-o", "#out", NULL */
    Build_StrList compile_options;

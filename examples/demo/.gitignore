@@ -1,0 +1,9 @@
+/demo
+/build
+*.exe
+*.o
+*.so
+*.ilk
+*.pdb
+*.lib
+
