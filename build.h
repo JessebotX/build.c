@@ -1045,6 +1045,9 @@ BUILD_INTERNAL int build__directory_set_windows(const char* path)
 
 BUILD_INTERNAL int build__process_execute_windows(const char* args[], Build_StrBuf* buf)
 {
+   /* Credit: modified version inspired by
+      <https://learn.microsoft.com/en-gb/archive/blogs/twistylittlepassagesallalike/everyone-quotes-command-line-arguments-the-wrong-way>
+      and <https://github.com/tsoding/nob.h> */
    int result = 0;
    int i;
    STARTUPINFO startup = BUILD__EMPTY_VALUE;
@@ -1059,7 +1062,7 @@ BUILD_INTERNAL int build__process_execute_windows(const char* args[], Build_StrB
    ZeroMemory(&process, sizeof(process));
    build_strbuf_clear(buf);
 
-   for (i = 0; args[i]; i++) { /* join and escape args */
+   for (i = 0; args[i]; i++) {
       int len = build__strlen(args[i]);
       int backslashes = 0;
       int j = 0;
@@ -1139,6 +1142,8 @@ ret:
 
 BUILD_INTERNAL int build__directory_delete_len_windows(const char* path, int len)
 {
+   /* Credit: modified version of
+      <https://learn.microsoft.com/en-us/windows/win32/fileio/listing-the-files-in-a-directory> */
    int result = 1;
    HANDLE file;
    WIN32_FIND_DATA file_data;
