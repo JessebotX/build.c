@@ -16,6 +16,8 @@ where `build.c` is in the same directory as `build.h` and has the following cont
 ```c
 /// build.c
 
+// Last updated: 2026-08-16
+
 // NOTE: (1) WIP, API subject to change
 //       (2) File is written using C99+ features, but can be rewritten
 //           to support C89
@@ -25,24 +27,12 @@ where `build.c` is in the same directory as `build.h` and has the following cont
 
 int main(int argc, char** argv)
 {
-   CompileTarget target = {
+   Artifact artifact = (Artifact){
       .compiler = "clang",
-      .compile_flags = string_list_new_varargs(
-         "-Wall",
-         "-Wextra",
-         "-O0",
-         "-g3",
-         NULL
-      ),
-      .source_files = string_list_new_varargs(
-         "main.c",
-         "base.c",
-         NULL
-      ),
+      .compile_options = strlist_from_args("-O0", "-g3", NULL),
+      .source_files = strlist_from_args("main.c", NULL),
    };
-
-   // on Windows, .exe is automatically appended onto the name
-   target_compile_executable(&target, "my_exe_name");
+   artifact_new_executable(&artifact, "my_exe_name");
 
    return 0;
 }
