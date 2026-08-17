@@ -1139,52 +1139,60 @@ ret:
 
 BUILD_INTERNAL int build__directory_delete_len_windows(const char* path, int len)
 {
-   int result = 0;
+   int result = 1;
    HANDLE file;
    WIN32_FIND_DATA file_data;
-   Build_StrBuf dir = build_strbuf_from_c_len(path, len);
+   Build_StrBuf dir;
    int first_time = 1;
-   Build_StrBuf full_path = build_strbuf_from_c_len(path, len);
+   Build_StrBuf full_path;
 
    if (dir.len == 0) {
-      result = 1;
-      goto ret_cleanup;
+      goto ret;
    }
 
+   while (path[len - 1] == '\\' || path[len - 1] == '/') {
+      len--;
+   }
+
+   dir = build_strbuf_from_c_len(path, len);
+   full_path = build_strbuf_from_c_len(path, len);
    BUILD_STRBUF_APPEND_LITERAL(&dir, "\\*");
 
    if (dir.len == 0) {
+      result = 0;
       goto ret_cleanup;
    }
 
    file = FindFirstFileA(dir.bytes, &file_data);
    if (file == INVALID_HANDLE_VALUE) {
+      result = 0;
       goto ret_cleanup;
    }
 
-   do {
-      if (first_time) {
-         first_time = 0;
-         continue;
-      }
-
-      BUILD_STRBUF_APPEND_LITERAL(&full_path, "\\");
+   while (FindNextFile(file, &file_data)) {
+      BUILD_STRBUF_APPEND_LITERAL(&full_path, "/");
       build_strbuf_append_c(&full_path, file_data.cFileName);
 
       if (file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
          if (build__strncmp(file_data.cFileName, "..", sizeof("..") - 1) != 0
              && build__strncmp(file_data.cFileName, ".", sizeof(".") - 1) != 0) {
-            build__directory_delete_len_windows(full_path.bytes, full_path.len);
+            int subdir_result;
+            subdir_result = build__directory_delete_len_windows(full_path.bytes, full_path.len);
+            if (!subdir_result) {
+               result = 0;
+            }
          }
       } else {
-         DeleteFileA(full_path.bytes);
+         if (!DeleteFileA(full_path.bytes)) {
+            result = 0;
+         }
       }
 
       while (full_path.len > len) {
          full_path.bytes[full_path.len - 1] = '\0';
          full_path.len--;
       }
-   } while (FindNextFile(file, &file_data) != 0);
+   }
 
    /* Remove "\\*" from the path */
    dir.bytes[dir.len - 1] = '\0';
@@ -1192,10 +1200,15 @@ BUILD_INTERNAL int build__directory_delete_len_windows(const char* path, int len
    dir.bytes[dir.len - 1] = '\0';
    dir.len--;
 
-   RemoveDirectoryA(dir.bytes);
+   if (!RemoveDirectoryA(dir.bytes)) {
+      result = 0;
+   }
 
 ret_cleanup:
-   /* TODO */
+   FindClose(file);
+   build_strbuf_free(&full_path);
+   build_strbuf_free(&dir);
+ret:
    return result;
 }
 
