@@ -190,6 +190,7 @@ struct Build_Artifact {
    const char* linker; /* default: use compiler */
    const char** compile_command_format; /* default: "#cc", "#cflags", "-c", "#in", "-o", "#out", NULL */
    const char** link_command_format; /* default: "#cc", "#ldflags", "#in", "-o", "#out", NULL */
+   const char* output_dir;
    Build_StrList compile_options;
    Build_StrList link_options;
    Build_StrList source_files;
@@ -557,6 +558,13 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
    build_strlist_append_c(&command_args, artifact->compiler);
    build_strlist_append_l(&command_args, &artifact->compile_options);
 
+   if (artifact->output_dir) {
+      if (!build_directory_new(artifact->output_dir)) {
+         /* TODO: logging */
+         goto ret_cleanup;
+      }
+   }
+
    if (artifact->source_files.len > 0) {
       int source_index;
       int output_index;
@@ -577,6 +585,11 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
          /* output object path */
          build_strbuf_clear(&output_path);
          BUILD_MEM_FREE(command_args.bytes[output_index], (build__strlen(command_args.bytes[output_index]) + 1) * sizeof(*command_args.bytes));
+
+         if (artifact->output_dir) {
+            build_strbuf_append_c(&output_path, artifact->output_dir);
+            BUILD_STRBUF_APPEND_LITERAL(&output_path, "/");
+         }
          build_strbuf_append_c(&output_path, artifact->source_files.bytes[i]);
          BUILD_STRBUF_APPEND_LITERAL(&output_path, ".o");
          command_args.bytes[output_index] = build__strndup(output_path.bytes, output_path.len);
@@ -593,6 +606,11 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
    build_strbuf_clear(&output_path);
    build_strlist_clear(&command_args);
 
+   /* construct output exe path */
+   if (artifact->output_dir) {
+      build_strbuf_append_c(&output_path, artifact->output_dir);
+      BUILD_STRBUF_APPEND_LITERAL(&output_path, "/");
+   }
    build_strbuf_append_c(&output_path, exe_name);
 #ifdef BUILD_OS_WINDOWS
    BUILD_STRBUF_APPEND_LITERAL(&output_path, ".exe");
@@ -609,12 +627,11 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
    build_strlist_append_c(&command_args, output_path.bytes);
 
    result = build_process_execute_b(&command_args, &command_buf);
-
+ret_cleanup:
    build_strbuf_free(&command_buf);
    build_strbuf_free(&output_path);
    build_strlist_free(&objects);
    build_strlist_free(&command_args);
-
    return result;
 }
 
@@ -867,7 +884,6 @@ BUILD_DEF void build_strbuf_append_c_len(Build_StrBuf* s, const char* arg, int l
    s->len = new_len;
    s->bytes[s->len] = '\0';
 }
-
 
 #ifndef BUILD_DISABLE_STDINC
 BUILD_DEF Build_StrList build_strlist_from_args(const char* arg_0, ...)
