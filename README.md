@@ -1,6 +1,6 @@
 # build.h
 
-> NOTE: WIP: only has basic functionality such as creating directories and running commands on Windows systems only.
+> NOTE: currently only supports Windows systems.
 
 A C89+ [stb-style](https://github.com/nothings/stb) single-file header-only C library for writing build recipes in C. Inspired by the likes of [`nob.h`](https://github.com/tsoding/nob.h), [cmake](https://cmake.org/) and Zig's build system [`build.zig`](https://ziglang.org/learn/build-system/).
 
