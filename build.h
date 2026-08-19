@@ -1,66 +1,64 @@
-/* build.h
-
-  * URL: <https://github.com/JessebotX/build.h>
-
-  Portable single-file C89+/C++ library for writing project build
-  recipes.
-
-Quickstart
-----------
-
-  my_program.c:
-
-      #include <stdio.h>
-      #define Hello_world puts
-
-      int main(void) {
-         Hello_world("printf");
-         return 0;
-      }
-
-
-  build.c (written in C99+, but build.h supports C89)
-
-      #define BUILD_IMPLEMENTATION
-      #include "build.h"
-
-      int main(int argc, char** argv) {
-         Artifact artifact = (Artifact){
-            .compiler = "clang",
-            .compile_options = strlist_from_args("-O0", "-g3", NULL),
-            .link_options = strlist_from_args("-lm", NULL),
-            .source_files = strlist_from_args("my_program1.c", "my_program2.c", NULL),
-         };
-         artifact_new_executable(&artifact, "my_program");
-
-         return 0;
-      }
-
-  (Windows) Run the following commands to build and execute my_program:
-
-      clang build.c -o build.exe
-      build.exe
-      my_program.exe
-
-License
--------
-
-  * SPDX-License-Identifier: 0BSD
-
-  Copyright (c) 2026 Jesse <jessebot.git@gmail.com>
-
-  Permission to use, copy, modify, and/or distribute this software for
-  any purpose with or without fee is hereby granted.
-
-  THE SOFTWARE IS PROVIDED “AS IS” AND THE AUTHOR DISCLAIMS ALL
-  WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
-  WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
-  AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
-  DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA
-  OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-  TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-  PERFORMANCE OF THIS SOFTWARE.
-*/
+/** build.h
+ *
+ *   * URL: <https://github.com/JessebotX/build.h>
+ *
+ *   Portable single-file C89+/C++ library for writing project build
+ *   recipes.
+ *
+ * Quickstart
+ * ----------
+ *
+ *   my_program.c:
+ *
+ *       #include <stdio.h>
+ *       #define Hello_world puts
+ *
+ *       int main(void) {
+ *          Hello_world("printf");
+ *          return 0;
+ *       }
+ *
+ *
+ *   build.c (written in C99+, but build.h supports C89)
+ *
+ *       #define BUILD_IMPLEMENTATION
+ *       #include "build.h"
+ *
+ *       int main(int argc, char** argv) {
+ *          Artifact artifact = (Artifact){
+ *             .compiler = "clang",
+ *             .compile_options = strlist_from_args("-O0", "-g3", NULL),
+ *             .link_options = strlist_from_args("-lm", NULL),
+ *             .source_files = strlist_from_args("my_program1.c", "my_program2.c", NULL),
+ *          };
+ *          artifact_new_executable(&artifact, "my_program");
+ *
+ *          return 0;
+ *       }
+ *
+ *   (Windows) Run the following commands to build and execute my_program:
+ *
+ *       clang build.c -o build.exe
+ *       build.exe
+ *       my_program.exe
+ *
+ * License
+ * -------
+ *
+ *   Licensed under 0BSD:
+ *
+ *   Permission to use, copy, modify, and/or distribute this software for
+ *   any purpose with or without fee is hereby granted.
+ *
+ *   THE SOFTWARE IS PROVIDED “AS IS” AND THE AUTHOR DISCLAIMS ALL
+ *   WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+ *   WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+ *   AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+ *   DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA
+ *   OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+ *   TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ *   PERFORMANCE OF THIS SOFTWARE.
+ */
 
 #ifndef BUILD_H
 #define BUILD_H
@@ -159,8 +157,22 @@ License
  */
 typedef struct Build_StrBuf Build_StrBuf;
 struct Build_StrBuf {
+   /**
+    * Buffer for raw sequence of bytes, ending with a null terminator.
+    */
    char* bytes;
+   /**
+    * Length of bytes buffer (not including the null terminator).
+    *
+    * NOTE: max LEN = CAP - 1.
+    */
    int len;
+   /**
+    * Allocated size of BYTES. Determines the maximum LEN before
+    * BYTES need to be reallocated.
+    *
+    * NOTE: max LEN = CAP - 1.
+    */
    int cap;
 };
 #ifndef BUILD_DISABLE_SHORT_NAMES
@@ -173,8 +185,24 @@ struct Build_StrBuf {
  */
 typedef struct Build_StrList Build_StrList;
 struct Build_StrList {
+   /**
+    * Buffer for pointers to null-terminated strings, ending with a null pointer.
+    *
+    * NOTE: each null-terminated string item has an allocated size of strlen(itself) + 1.
+    */
    const char** bytes;
+   /**
+    * Number of pointers in list (not including the terminating null pointer).
+    *
+    * NOTE: max LEN = CAP - 1.
+    */
    int len;
+   /**
+    * Allocated size of BYTES divided by the sizeof(char*). Determines
+    * the maximum LEN before BYTES need to be reallocated.
+    *
+    * NOTE: max LEN = CAP - 1.
+    */
    int cap;
 };
 #ifndef BUILD_DISABLE_SHORT_NAMES
@@ -186,13 +214,55 @@ struct Build_StrList {
  */
 typedef struct Build_Artifact Build_Artifact;
 struct Build_Artifact {
+   /**
+    * Program used to build source files into objects.
+    */
    const char* compiler;
-   const char* linker; /* default: use compiler */
-   const char** compile_command_format; /* default: "#cc", "#cflags", "-c", "#in", "-o", "#out", NULL */
-   const char** link_command_format; /* default: "#cc", "#ldflags", "#in", "-o", "#out", NULL */
+   /**
+    * Program used to link source objects into a library or executable file.
+    *
+    * Default: use value in COMPILER.
+    */
+   const char* linker;
+   /**
+    * Format for COMPILER arguments, ending with a null pointer.
+    *
+    * List of format strings:
+    *
+    * - "#compile_options#" => insert all arguments in COMPILE_OPTIONS here.
+    * - "#link_options#" => insert all arguments in LINK_OPTIONS here.
+    * - "#in#" => insert path to source files here.
+    * - "#out#" => insert output path of compiled source object here.
+    * - NULL => required last argument in COMPILE_COMMAND_FORMAT.
+    * - ...all other values... => insert the string as is (e.g. "-c", "-o", etc.) into the argument.
+    *
+    * Default = { "#compile_options#", "-c", "#in#", "-o", "#out#", NULL }
+    */
+   const char** compile_command_format;
+   /**
+    * Format for LINKER arguments, ending with a null pointer.
+    *
+    * See COMPILE_COMMAND_FORMAT docuemntation on how format strings work.
+    *
+    * Default = { "#link_options#", "#in#", "-o", "#out#", NULL }
+    */
+   const char** link_command_format;
+   /**
+    * Directory to store generated output files. NOTE: a non-existent
+    * path will be automatically created.
+    */
    const char* output_dir;
+   /**
+    * List of options/flags to pass into COMPILER.
+    */
    Build_StrList compile_options;
+   /**
+    * List of options/flags to pass into LINKER.
+    */
    Build_StrList link_options;
+   /**
+    * List of source file paths.
+    */
    Build_StrList source_files;
 };
 #ifndef BUILD_DISABLE_SHORT_NAMES
@@ -549,14 +619,13 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
    Build_StrList objects = BUILD__EMPTY_VALUE;
    Build_StrBuf output_path = BUILD__EMPTY_VALUE;
    Build_StrBuf command_buf = BUILD__EMPTY_VALUE;
+   const char* format_item;
+   int source_index;
+   int output_index;
+   const char* default_compile_command_format[] = { "#compile_options#", "-c", "#in#", "-o", "#out#", NULL };
+   const char* default_link_command_format[] = { "#link_options#", "#in#", "-o", "#out#", NULL };
    BUILD_ASSERT(artifact && "missing artifact");
    BUILD_ASSERT(exe_name && "missing exe name"); /* TODO: default to root dir name */
-
-   /* TODO: utitize *_command_format strings */
-
-   /* #cc# #cflags# */
-   build_strlist_append_c(&command_args, artifact->compiler);
-   build_strlist_append_l(&command_args, &artifact->compile_options);
 
    if (artifact->output_dir) {
       if (!build_directory_new(artifact->output_dir)) {
@@ -565,66 +634,96 @@ BUILD_DEF int build_artifact_new_executable(Build_Artifact* artifact, const char
       }
    }
 
-   if (artifact->source_files.len > 0) {
-      int source_index;
-      int output_index;
+   if (!artifact->compile_command_format) {
+      artifact->compile_command_format = default_compile_command_format;
+   }
 
-      /* ... -c #in -o #out */
-      BUILD_STRLIST_APPEND_LITERAL(&command_args, "-c");
-      BUILD_STRLIST_APPEND_LITERAL(&command_args, "placeholder"); /* placeholder index for source file */
-      source_index = command_args.len - 1;
-      BUILD_STRLIST_APPEND_LITERAL(&command_args, "-o");
-      BUILD_STRLIST_APPEND_LITERAL(&command_args, "placeholder"); /* placeholder index for output file */
-      output_index = command_args.len - 1;
+   if (!artifact->link_command_format) {
+      artifact->link_command_format = default_link_command_format;
+   }
 
-      for (i = 0; i < artifact->source_files.len; i++) {
-         /* source path */
-         BUILD_MEM_FREE(command_args.bytes[source_index], (build__strlen(command_args.bytes[source_index]) + 1) * sizeof(*command_args.bytes));
-         command_args.bytes[source_index] = build__strdup(artifact->source_files.bytes[i]);
+   if (artifact->source_files.len <= 0) {
+      /* TODO: logging */
+      goto ret_cleanup;
+   }
 
-         /* output object path */
-         build_strbuf_clear(&output_path);
-         BUILD_MEM_FREE(command_args.bytes[output_index], (build__strlen(command_args.bytes[output_index]) + 1) * sizeof(*command_args.bytes));
+   build_strlist_append_c(&command_args, artifact->compiler);
+   while ((format_item = *artifact->compile_command_format++)) {
+      int format_item_len = build__strlen(format_item);
 
-         if (artifact->output_dir) {
-            build_strbuf_append_c(&output_path, artifact->output_dir);
-            BUILD_STRBUF_APPEND_LITERAL(&output_path, "/");
-         }
-         build_strbuf_append_c(&output_path, artifact->source_files.bytes[i]);
-         BUILD_STRBUF_APPEND_LITERAL(&output_path, ".o");
-         command_args.bytes[output_index] = build__strndup(output_path.bytes, output_path.len);
-
-         /* run command */
-         result = build_process_execute_b(&command_args, &command_buf);
-         BUILD_ASSERT(result && "running process failed");
-
-         /* add to object list for linking */
-         build_strlist_append_c_len(&objects, output_path.bytes, output_path.len);
+      if (build__strncmp(format_item, "#compile_options#", format_item_len) == 0) {
+         build_strlist_append_l(&command_args, &artifact->compile_options);
+      } else if (build__strncmp(format_item, "#link_options#", format_item_len) == 0) {
+         build_strlist_append_l(&command_args, &artifact->link_options);
+      } else if (build__strncmp(format_item, "#in#", format_item_len) == 0) {
+         BUILD_STRLIST_APPEND_LITERAL(&command_args, "#"); /* placeholder for source file */
+         source_index = command_args.len - 1;
+      } else if (build__strncmp(format_item, "#out#", format_item_len) == 0) {
+         BUILD_STRLIST_APPEND_LITERAL(&command_args, "#"); /* placeholder for output file */
+         output_index = command_args.len - 1;
+      } else {
+         build_strlist_append_c(&command_args, format_item);
       }
+   }
+
+   for (i = 0; i < artifact->source_files.len; i++) {
+      /* source path */
+      BUILD_MEM_FREE(command_args.bytes[source_index], (build__strlen(command_args.bytes[source_index]) + 1) * sizeof(*command_args.bytes));
+      command_args.bytes[source_index] = build__strdup(artifact->source_files.bytes[i]);
+
+      /* output object path */
+      build_strbuf_clear(&output_path);
+      BUILD_MEM_FREE(command_args.bytes[output_index], (build__strlen(command_args.bytes[output_index]) + 1) * sizeof(*command_args.bytes));
+
+      if (artifact->output_dir) {
+         build_strbuf_append_c(&output_path, artifact->output_dir);
+         BUILD_STRBUF_APPEND_LITERAL(&output_path, "/");
+      }
+      build_strbuf_append_c(&output_path, artifact->source_files.bytes[i]);
+      BUILD_STRBUF_APPEND_LITERAL(&output_path, ".o");
+      command_args.bytes[output_index] = build__strndup(output_path.bytes, output_path.len);
+
+      /* run command */
+      result = build_process_execute_b(&command_args, &command_buf);
+      BUILD_ASSERT(result && "running process failed");
+
+      /* add to object list for linking */
+      build_strlist_append_c_len(&objects, output_path.bytes, output_path.len);
    }
 
    build_strbuf_clear(&output_path);
    build_strlist_clear(&command_args);
 
-   /* construct output exe path */
-   if (artifact->output_dir) {
-      build_strbuf_append_c(&output_path, artifact->output_dir);
-      BUILD_STRBUF_APPEND_LITERAL(&output_path, "/");
-   }
-   build_strbuf_append_c(&output_path, exe_name);
-#ifdef BUILD_OS_WINDOWS
-   BUILD_STRBUF_APPEND_LITERAL(&output_path, ".exe");
-#endif
-
    if (!artifact->linker) {
       artifact->linker = artifact->compiler;
    }
-
    build_strlist_append_c(&command_args, artifact->linker);
-   build_strlist_append_l(&command_args, &artifact->link_options);
-   build_strlist_append_l(&command_args, &objects);
-   BUILD_STRLIST_APPEND_LITERAL(&command_args, "-o");
-   build_strlist_append_c(&command_args, output_path.bytes);
+
+   BUILD_ASSERT(artifact->link_command_format);
+   while ((format_item = *artifact->link_command_format++)) {
+      int format_item_len = build__strlen(format_item);
+
+      if (build__strncmp(format_item, "#compile_options#", format_item_len) == 0) {
+         build_strlist_append_l(&command_args, &artifact->compile_options);
+      } else if (build__strncmp(format_item, "#link_options#", format_item_len) == 0) {
+         build_strlist_append_l(&command_args, &artifact->link_options);
+      } else if (build__strncmp(format_item, "#in#", format_item_len) == 0) {
+         build_strlist_append_l(&command_args, &objects);
+      } else if (build__strncmp(format_item, "#out#", format_item_len) == 0) {
+         /* construct output exe path */
+         if (artifact->output_dir) {
+            build_strbuf_append_c(&output_path, artifact->output_dir);
+            BUILD_STRBUF_APPEND_LITERAL(&output_path, "/");
+         }
+         build_strbuf_append_c(&output_path, exe_name);
+#ifdef BUILD_OS_WINDOWS
+         BUILD_STRBUF_APPEND_LITERAL(&output_path, ".exe");
+#endif
+         build_strlist_append_c(&command_args, output_path.bytes);
+      } else {
+         build_strlist_append_c(&command_args, format_item);
+      }
+   }
 
    result = build_process_execute_b(&command_args, &command_buf);
 ret_cleanup:
@@ -1253,10 +1352,12 @@ BUILD_INTERNAL int build__directory_new_windows(const char* path)
 
       if (!result) {
          DWORD err = GetLastError();
-         if (err != ERROR_ALREADY_EXISTS || err != ERROR_PATH_NOT_FOUND) {
+         if (err != ERROR_ALREADY_EXISTS && err != ERROR_PATH_NOT_FOUND) {
             /* TODO: logging */
             result = 0;
             goto ret;
+         } else {
+            result = 1;
          }
       }
    }
