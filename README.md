@@ -2,7 +2,7 @@
 
 > NOTE: currently only supports Windows systems.
 
-A C89+ [stb-style](https://github.com/nothings/stb) single-file header-only C library for writing build recipes in C. Inspired by the likes of [`nob.h`](https://github.com/tsoding/nob.h), [cmake](https://cmake.org/) and Zig's build system [`build.zig`](https://ziglang.org/learn/build-system/).
+A C89+ [stb-style](https://github.com/nothings/stb) single-file header-only C library for writing build recipes in C. Inspired by the likes of [`nob.h`](https://github.com/tsoding/nob.h) and Zig's build system [`build.zig`](https://ziglang.org/learn/build-system/).
 
 The goal is to be able to manage a project written in C by only using C and a C89+ or a C++ compiler. That means no external shell script or build system tool required, just run the following commands in a supported project (e.g. on Windows `cmd.exe` using `clang` compiler):
 
